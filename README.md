@@ -5,12 +5,12 @@
 <h1 align="center">Manifield</h1>
 
 <p align="center">
-  A macOS workbench for mathematical theory, readable by you and by AI agents.
+  A macOS workbench for mathematical research, readable by you and by AI agents.
 </p>
 
-Manifield keeps a mathematical theory you are developing as a folder of plain Markdown files: definitions, lemmas, theorems, conjectures and figures, one statement per file. Through the app you read them rendered, see the dependency graph, and track what evidence stands behind each statement. Optional AI assistants work from your own definitions and notation, and everything they want to change arrives as a proposal you can accept or reject.
+Manifield keeps a mathematical theory you are developing as a folder of plain Markdown files: definitions, lemmas, theorems, conjectures and figures, one statement per file. Through the app you read them rendered, see the dependency graph, and track what evidence stands behind each statement. Optional AI assistants work from your own definitions and notation, and everything they want to change arrives as a proposal you can accept, reject or use auto mode.
 
-It is free software under the GPLv3, written by one person, and still early.
+It is free software under the GPLv3, written by one person.
 
 <p align="center">
   <a href="docs/media/manifield-demo.mp4"><img src="docs/media/demo-poster.png" width="860" alt="Play the 92-second walkthrough"></a>
@@ -28,8 +28,9 @@ It is meant to be useful **without any AI at all**. Browsing, search, the graph,
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/media/import-review.png" alt="Reviewing items proposed by the LaTeX import"><br><sub><b>Import LaTeX, review before saving.</b> Your <code>.tex</code> is split into items with dependencies, and nothing is written until you confirm.</sub></td>
-    <td width="50%"><img src="docs/media/plain-markdown.png" alt="An item as a Markdown file with YAML frontmatter"><br><sub><b>Every item is a plain Markdown file</b> with a little YAML: id, type, status, <code>depends_on</code>, section.</sub></td>
+    <td width="50%"><img src="docs/media/import-review.png" alt="Reviewing items proposed by the LaTeX import"><br><sub><b>Import LaTeX, review before saving.</b> Your <code>.tex</code> is split into items with dependencies.</sub></td>
+    <td width="50%"><img src="docs/media/plain-markdown.png" alt="An item as a Markdown file with YAML frontmatter"><br><sub><b>Every item is a plain Markdown file</b> with a little YAML: id, type, status, 
+    <code>depends_on</code>, section.</sub></td>
   </tr>
   <tr>
     <td><img src="docs/media/dependency-graph.png" alt="The dependency graph of the Baire example"><br><sub><b>Dependency graph.</b> Colour by family, filter by section, type and status, hover for the rendered statement.</sub></td>
@@ -139,7 +140,7 @@ In Xcode, choose your own team under *Signing & Capabilities*, then run the **Ma
 - **macOS only.** The app is SwiftUI with web views for rendering.
 - **The LaTeX import is imperfect.** References across sections can get the wrong ids, so dependencies dangle. The importer may mark cited results *Human approved*. `\ref` and `\cite` render as label keys, not links. Check dependencies and statuses after importing; the example's README lists what had to be fixed by hand.
 - **Outside agents' edits.** New files and atomic saves show up live. In-place overwrites don't, so press reload. A file with broken frontmatter is skipped without a visible warning.
-- **AI cost is not well understood.** Research programs have used hundreds of thousands of tokens on small problems, mostly input. Set limits under Settings → Limits.
+- **AI cost is not well understood.** Research programs have used hundreds of thousands of tokens on small problems, mostly input. Set limits under Settings → Limits. The app limits were not tested properly yet. Do not rely only on them.
 - **The prover can only be reached inside a research program** for now.
 - **No proof assistant integration yet.** *Formally verified* is a status you set by hand. A Lean adapter is planned; the prover already has a verifier interface for it.
 - **Auto mode** has had much less testing than Propose mode.
