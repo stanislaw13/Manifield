@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="manifield.css">
+<style>
+  body { padding: 10px 14px 16px; }
+  #messages { max-width: 760px; margin: 0 auto; }
+  .msg { margin: 10px 0; }
+  .msg.user {
+    background: var(--user-bubble);
+    border-radius: 12px;
+    padding: 8px 14px;
+    margin-left: 15%;
+  }
+  .msg.assistant { padding: 2px 2px; }
+  .msg.assistant.streaming::after {
+    content: "▌";
+    color: var(--accent);
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---- theory item mentions (clickable, open in the side inspector) ---- */
+  .item-ref {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 0.92em;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .item-ref:hover {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  /* The one currently open in the inspector, so the transcript says which. */
+  .item-ref.open {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border-color: var(--accent);
+  }
+
+  /* ---- user attachments (pills + thumbnails above the bubble) ---- */
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    margin: 10px 0 4px 15%;
+  }
+  .attachment-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attachment-pill::before { content: "\1F4C4"; }
+  .attachment-thumb {
+    max-height: 120px;
+    max-width: 220px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: zoom-in;
+  }
+
+  /* ---- tool + thinking notes ---- */
+  .tool-note {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    margin: 4px 0 4px 8px;
+    border-left: 2px solid var(--border);
+    padding-left: 8px;
+  }
+  .tool-note.error { color: var(--error); border-left-color: var(--error); }
+  .thinking-note {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 8px 0 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 10px;
+    background: color-mix(in srgb, var(--card) 55%, transparent);
+  }
+  .thinking-note summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .thinking-note summary::-webkit-details-marker { display: none; }
+  .thinking-note summary::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    flex: none;
+  }
+  .thinking-note[open] summary::before { transform: rotate(45deg); }
+  .thinking-note[open] summary { margin-bottom: 6px; }
+  .thinking-note .thinking-body {
+    white-space: pre-wrap;
+    font-style: italic;
+    opacity: 0.85;
+    max-height: 280px;
+    overflow-y: auto;
+    border-left: 2px solid var(--border);
+    padding-left: 8px;
+  }
+
+  /* ---- live status strip (single place that animates) ---- */
+  #status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 6px 2px;
+    font-size: 13px;
+  }
+  #status .status-label {
+    background: linear-gradient(90deg, var(--muted) 30%, var(--fg) 50%, var(--muted) 70%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.2s linear infinite;
+    transition: opacity 0.25s ease;
+  }
+  #status .status-label.swapping { opacity: 0; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  #status .status-orb {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: orb 1.4s ease-in-out infinite;
+    flex: none;
+  }
+  @keyframes orb {
+    0%, 100% { transform: scale(0.7); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+  #status .status-spinner {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+    flex: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- visualizations ---- */
+  .viz-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 12px 0;
+    background: var(--card);
+  }
+  .viz-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .viz-header .viz-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .viz-header button {
+    font: inherit;
+    font-weight: 500;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .viz-header button:hover { color: var(--accent); border-color: var(--accent); }
+  .viz-body { background: #ffffff; text-align: center; }
+  .viz-body img {
+    max-width: 100%;
+    max-height: 440px;
+    cursor: zoom-in;
+    display: inline-block;
+    vertical-align: top;
+  }
+  .viz-caption {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 6px 12px 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ---- lightbox (near-full-window preview) ---- */
+  #lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+    padding: 26px;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: 96%;
+    max-height: calc(100% - 48px);
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  }
+  #lightbox .lightbox-bar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  #lightbox .lightbox-bar span {
+    color: #f0f0f2;
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #lightbox .lightbox-bar button {
+    font: inherit;
+    font-size: 12px;
+    color: #fff;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 7px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+  #lightbox .lightbox-bar button:hover { background: rgba(255,255,255,0.28); }
+
+  /* ---- change summary: what a turn wrote to the library ----
+   * Collapsed it is one line; expanded, one row per write; each row opens a
+   * block-level diff against the contents the journal saved before the write. */
+  :root {
+    --diff-add-bg: rgba(52, 199, 89, 0.13);
+    --diff-add-fg: #248a3d;
+    --diff-del-bg: rgba(255, 59, 48, 0.11);
+    --diff-del-fg: #c9342a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --diff-add-bg: rgba(48, 209, 88, 0.16);
+      --diff-add-fg: #4cd964;
+      --diff-del-bg: rgba(255, 69, 58, 0.16);
+      --diff-del-fg: #ff6961;
+    }
+  }
+
+  .write-summary {
+    margin: 10px 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+    font-size: 13px;
+  }
+  .write-summary > summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+  }
+  .write-summary > summary::-webkit-details-marker { display: none; }
+  .write-summary > summary::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    flex: none;
+  }
+  .write-summary[open] > summary::before { transform: rotate(45deg); }
+  .ws-headline { flex: 1; font-weight: 600; }
+  .ws-revert {
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 9px;
+    cursor: pointer;
+    flex: none;
+  }
+  .ws-revert:hover { color: var(--error); border-color: var(--error); }
+  .ws-body { padding: 0 10px 8px; }
+
+  .write-reverted {
+    margin: 10px 0;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  /* One write. */
+  .ws-item { border-top: 1px solid var(--border); }
+  .ws-item > summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 6px 2px;
+  }
+  .ws-item > summary::-webkit-details-marker { display: none; }
+  .ws-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    padding: 1px 5px;
+    flex: none;
+  }
+  .ws-badge.create { color: var(--diff-add-fg); background: var(--diff-add-bg); }
+  .ws-badge.update { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .ws-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ws-type { font-size: 11.5px; color: var(--muted); flex: none; }
+  .ws-diff { padding: 2px 0 8px; }
+  .ws-empty { font-size: 12px; color: var(--muted); padding: 4px 2px; }
+
+  /* Whole blocks, coloured — never half an equation. */
+  .diff-block { margin: 4px 0; }
+  .diff-side {
+    position: relative;
+    padding: 3px 8px 3px 22px;
+    border-left: 3px solid transparent;
+    border-radius: 0 6px 6px 0;
+    overflow-x: auto;
+  }
+  .diff-side::before {
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    font: 12px/1.55 "SF Mono", ui-monospace, Menlo, monospace;
+    opacity: 0.8;
+  }
+  .diff-side.added, .diff-side.after {
+    background: var(--diff-add-bg);
+    border-left-color: var(--diff-add-fg);
+  }
+  .diff-side.added::before, .diff-side.after::before {
+    content: "+";
+    color: var(--diff-add-fg);
+  }
+  .diff-side.removed, .diff-side.before {
+    background: var(--diff-del-bg);
+    border-left-color: var(--diff-del-fg);
+  }
+  .diff-side.removed::before, .diff-side.before::before {
+    content: "\2212";
+    color: var(--diff-del-fg);
+  }
+  .diff-side.unchanged { opacity: 0.62; }
+  .diff-side.unchanged::before { content: "\00B7"; color: var(--muted); }
+  /* A block is shown on its own, so the vertical rhythm of a full document would only
+   * pad the colour out around it. */
+  .diff-side .katex-display { margin: 0.25em 0; }
+  .diff-side p,
+  .diff-side h1, .diff-side h2, .diff-side h3,
+  .diff-side ul, .diff-side ol, .diff-side pre { margin: 0.25em 0; }
+  .diff-side h1, .diff-side h2, .diff-side h3 { font-size: 1.05em; }
+  .diff-key {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 0.9em;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+
+  /* Long stretches of untouched text fold away, so the changes are what you see. */
+  .ws-context { margin: 4px 0; }
+  .ws-context > summary {
+    cursor: pointer;
+    user-select: none;
+    font-size: 11.5px;
+    color: var(--muted);
+    padding: 2px 0 2px 22px;
+  }
+  .ws-context > summary::-webkit-details-marker { display: none; }
+  .ws-context > summary::after { content: " \2026"; }
+
+  /* Word-level highlight, on the source and on demand: rendered output cannot carry a
+   * highlight through KaTeX, but the source it was typeset from can. */
+  .ws-wordbar { padding: 2px 0 0 22px; }
+  .ws-wordbar > button {
+    font: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 7px;
+    cursor: pointer;
+  }
+  .ws-wordbar > button:hover { color: var(--accent); border-color: var(--accent); }
+  .ws-words { margin-top: 5px; }
+  .ws-wordline {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    margin: 0 0 4px;
+    overflow-x: auto;
+  }
+  .ws-wordtag {
+    color: var(--muted);
+    margin-right: 8px;
+    user-select: none;
+  }
+  .word-del {
+    background: var(--diff-del-bg);
+    color: var(--diff-del-fg);
+    text-decoration: line-through;
+    border-radius: 3px;
+  }
+  .word-add {
+    background: var(--diff-add-bg);
+    color: var(--diff-add-fg);
+    border-radius: 3px;
+  }
+
+  .context-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--accent);
+    background: var(--user-bubble);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin: 6px 0;
+  }
+  .context-note::before { content: "\1F4CE"; }
+  .error-note {
+    color: var(--error);
+    background: var(--card);
+    border: 1px solid var(--error);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 13px;
+  }
+  .msg :first-child { margin-top: 0; }
+  .msg :last-child { margin-bottom: 0; }
+</style>
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="render.js"></script>
+</head>
+<body>
+<div id="messages"></div>
+<div id="lightbox">
+  <div class="lightbox-bar">
+    <span id="lightbox-title"></span>
+    <button id="lightbox-save">Save PNG…</button>
+    <button id="lightbox-close">Close</button>
+  </div>
+  <img id="lightbox-img" alt="">
+</div>
+<script>
+(function () {
+  const messages = document.getElementById("messages");
+  let currentEl = null;     // the assistant message being streamed (created lazily)
+  let buffer = "";
+  let renderScheduled = false;
+
+  function scrollToBottom() {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function addDiv(className) {
+    const el = document.createElement("div");
+    el.className = className;
+    messages.appendChild(el);
+    keepStatusLast();
+    return el;
+  }
+
+  function bridge(payload) {
+    try { window.webkit.messageHandlers.manifieldBridge.postMessage(payload); } catch (e) {}
+  }
+
+  /* The one write-path for message content: render, then turn mentions of theory
+   * items into click targets. */
+  function renderInto(el, markdown) {
+    setRenderedContent(el, renderMarkdownWithMath(markdown));
+    linkifyItemRefs(el);
+  }
+
+  /* ---- theory item mentions -------------------------------------------------
+   * Prismo names library items by id — `lem-greedy-bound`, or `slug:item-id` for
+   * an attached source's item. Swift pushes the ids that actually exist; only
+   * those become clickable, which is what keeps an id-shaped English word
+   * ("well-known") plain text. */
+  let itemRefs = new Set();
+  let openItemRef = "";
+
+  /* Kebab-case token, optionally `slug:`-prefixed. Deliberately loose — set
+   * membership below is the real filter. */
+  const REF_RE = /[a-z0-9]+(?:[-:][a-z0-9]+)+/g;
+
+  window.chatSetTheoryIndex = function (ids) {
+    itemRefs = new Set(Array.isArray(ids) ? ids : []);
+    // Items can arrive after a message rendered (project opened, source attached),
+    // so re-run over what is already on screen.
+    for (const el of messages.querySelectorAll(".msg")) linkifyItemRefs(el);
+  };
+
+  /* Marks which mention the inspector is showing (empty string = none). */
+  window.chatSetOpenItem = function (ref) {
+    openItemRef = ref || "";
+    markOpenItemRef();
+  };
+
+  function markOpenItemRef() {
+    for (const el of messages.querySelectorAll(".item-ref")) {
+      el.classList.toggle("open", el.dataset.item === openItemRef);
+    }
+  }
+
+  function makeRefElement(ref) {
+    const el = document.createElement("span");
+    el.className = "item-ref";
+    el.dataset.item = ref;
+    el.textContent = ref;
+    el.title = "Open " + ref;
+    return el;
+  }
+
+  function linkifyItemRefs(root) {
+    if (itemRefs.size === 0) return;
+
+    // Whole code spans first — how Prismo normally writes an id.
+    for (const code of root.querySelectorAll("code")) {
+      if (code.classList.contains("item-ref") || code.closest("pre")) continue;
+      const ref = code.textContent.trim();
+      if (!itemRefs.has(ref)) continue;
+      code.classList.add("item-ref");
+      code.dataset.item = ref;
+      code.title = "Open " + ref;
+    }
+
+    // Then bare mentions in prose, for when it writes the id without backticks.
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || !/[-:]/.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+        if (node.parentElement.closest("code, pre, a, .katex, .item-ref")) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const candidates = [];
+    while (walker.nextNode()) candidates.push(walker.currentNode);
+    for (const node of candidates) replaceRefsInText(node);
+
+    markOpenItemRef();
+  }
+
+  function replaceRefsInText(node) {
+    const text = node.nodeValue;
+    let fragment = null;
+    let consumed = 0;
+    for (const match of text.matchAll(REF_RE)) {
+      if (!itemRefs.has(match[0])) continue;
+      if (!fragment) fragment = document.createDocumentFragment();
+      if (match.index > consumed) {
+        fragment.appendChild(document.createTextNode(text.slice(consumed, match.index)));
+      }
+      fragment.appendChild(makeRefElement(match[0]));
+      consumed = match.index + match[0].length;
+    }
+    if (!fragment) return;
+    if (consumed < text.length) {
+      fragment.appendChild(document.createTextNode(text.slice(consumed)));
+    }
+    node.parentNode.replaceChild(fragment, node);
+  }
+
+  messages.addEventListener("click", (event) => {
+    const ref = event.target.closest(".item-ref");
+    if (!ref) return;
+    // In a change-summary row the id sits inside a <summary>; opening the item there
+    // must not also fold the row the user is reading.
+    if (ref.closest("summary")) event.preventDefault();
+    bridge({ type: "openItem", id: ref.dataset.item });
+  });
+
+  /* Streaming re-render is throttled: at most every 120 ms the accumulated markdown
+   * buffer is re-rendered so math typesets live without burning CPU per token. */
+  function scheduleRender() {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    setTimeout(() => {
+      renderScheduled = false;
+      if (currentEl) {
+        renderInto(currentEl, buffer);
+        scrollToBottom();
+      }
+    }, 120);
+  }
+
+  window.chatReset = function () {
+    messages.replaceChildren();
+    currentEl = null;
+    buffer = "";
+    statusEl = null;
+    statusLabelEl = null;
+    statusKind = "";
+    stopThinkingPhrases();
+    closeThinkingState();
+    closeLightbox();
+  };
+
+  window.chatAppendUser = function (markdown) {
+    renderInto(addDiv("msg user"), markdown);
+    scrollToBottom();
+  };
+
+  /* Re-plays a stored assistant message (opening a saved session). */
+  window.chatAppendAssistant = function (markdown) {
+    renderInto(addDiv("msg assistant"), markdown);
+    scrollToBottom();
+  };
+
+  /* Prepares for streamed assistant text. The element is created lazily on the first
+   * delta so an empty placeholder never sits in the transcript blinking. */
+  window.chatBeginAssistant = function () {
+    buffer = "";
+    currentEl = null;
+  };
+
+  window.chatAppendDelta = function (text) {
+    if (!currentEl) {
+      currentEl = addDiv("msg assistant streaming");
+    }
+    buffer += text;
+    scheduleRender();
+  };
+
+  window.chatFinalize = function () {
+    if (!currentEl) { buffer = ""; return; }
+    renderInto(currentEl, buffer);
+    currentEl.classList.remove("streaming");
+    currentEl = null;
+    buffer = "";
+    scrollToBottom();
+    flushUndefinedMacroReport();
+  };
+
+  window.chatToolNote = function (text, isError) {
+    const el = addDiv("tool-note" + (isError ? " error" : ""));
+    el.textContent = text;
+    scrollToBottom();
+  };
+
+  /* ---- live status strip: the ONE place that animates while Prismo works ---- */
+  let statusEl = null;
+  let statusLabelEl = null;
+  let statusKind = "";
+  let thinkingPhraseTimer = null;
+  let thinkingPhraseIndex = 0;
+  const thinkingPhrases = ["Thinking", "Reasoning", "Working it out", "Connecting ideas",
+                           "Weighing options", "Checking details"];
+
+  function ensureStatus(kind) {
+    if (!statusEl) {
+      statusEl = document.createElement("div");
+      statusEl.id = "status";
+      const icon = document.createElement("div");
+      icon.className = "status-icon";
+      statusLabelEl = document.createElement("span");
+      statusLabelEl.className = "status-label";
+      statusEl.appendChild(icon);
+      statusEl.appendChild(statusLabelEl);
+      messages.appendChild(statusEl);
+    }
+    const icon = statusEl.querySelector(".status-icon");
+    icon.className = "status-icon " + (kind === "tool" ? "status-spinner" : "status-orb");
+    keepStatusLast();
+  }
+
+  function keepStatusLast() {
+    if (statusEl && statusEl.parentNode === messages && messages.lastChild !== statusEl) {
+      messages.appendChild(statusEl);
+    }
+  }
+
+  function setStatusLabel(text, ellipsis) {
+    if (!statusLabelEl) return;
+    statusLabelEl.textContent = text + (ellipsis ? "…" : "");
+  }
+
+  function swapStatusLabel(text) {
+    if (!statusLabelEl) return;
+    statusLabelEl.classList.add("swapping");
+    setTimeout(() => {
+      if (!statusLabelEl) return;
+      statusLabelEl.textContent = text + "…";
+      statusLabelEl.classList.remove("swapping");
+    }, 250);
+  }
+
+  function stopThinkingPhrases() {
+    if (thinkingPhraseTimer) { clearInterval(thinkingPhraseTimer); thinkingPhraseTimer = null; }
+  }
+
+  /* kind: "thinking" (pulsing orb, rotating phrases) or "tool" (spinner, fixed label). */
+  window.chatStatus = function (label, kind) {
+    ensureStatus(kind);
+    if (kind === "thinking") {
+      if (statusKind !== "thinking") {
+        thinkingPhraseIndex = 0;
+        setStatusLabel(thinkingPhrases[0], true);
+        stopThinkingPhrases();
+        thinkingPhraseTimer = setInterval(() => {
+          thinkingPhraseIndex = (thinkingPhraseIndex + 1) % thinkingPhrases.length;
+          swapStatusLabel(thinkingPhrases[thinkingPhraseIndex]);
+        }, 4000);
+      }
+    } else {
+      stopThinkingPhrases();
+      setStatusLabel(label, true);
+    }
+    statusKind = kind;
+    scrollToBottom();
+  };
+
+  window.chatStatusClear = function () {
+    stopThinkingPhrases();
+    statusKind = "";
+    if (statusEl) { statusEl.remove(); statusEl = null; statusLabelEl = null; }
+  };
+
+  /* ---- model reasoning: collapsed card; the summary line, not a cursor, carries
+   *      the live state (the status strip owns the animation) ---- */
+  let thinkingEl = null;
+  let thinkingBody = null;
+  let thinkingSummary = null;
+  let thinkingStartedAt = 0;
+
+  function closeThinkingState() {
+    thinkingEl = null;
+    thinkingBody = null;
+    thinkingSummary = null;
+  }
+
+  window.chatThinkingDelta = function (text) {
+    if (!thinkingEl) {
+      thinkingEl = document.createElement("details");
+      thinkingEl.className = "thinking-note";
+      thinkingSummary = document.createElement("summary");
+      thinkingSummary.textContent = "Thinking…";
+      thinkingBody = document.createElement("div");
+      thinkingBody.className = "thinking-body";
+      thinkingEl.appendChild(thinkingSummary);
+      thinkingEl.appendChild(thinkingBody);
+      thinkingStartedAt = Date.now();
+      messages.appendChild(thinkingEl);
+      keepStatusLast();
+      scrollToBottom();
+    }
+    thinkingBody.textContent += text;
+    if (thinkingEl.open) scrollToBottom();
+  };
+
+  window.chatThinkingDone = function () {
+    if (!thinkingEl) return;
+    const seconds = Math.max(1, Math.round((Date.now() - thinkingStartedAt) / 1000));
+    thinkingSummary.textContent = "Thought for " + seconds + "s";
+    closeThinkingState();
+  };
+
+  /* Re-plays a stored thinking block (opening a saved session). */
+  window.chatThinkingReplay = function (text) {
+    if (!text) return;
+    const el = document.createElement("details");
+    el.className = "thinking-note";
+    const summary = document.createElement("summary");
+    summary.textContent = "Thought process";
+    const body = document.createElement("div");
+    body.className = "thinking-body";
+    body.textContent = text;
+    el.appendChild(summary);
+    el.appendChild(body);
+    messages.appendChild(el);
+    keepStatusLast();
+  };
+
+  /* ---- user attachments: pills/thumbnails above the user bubble ---- */
+  window.chatUserAttachments = function (list) {
+    const wrap = addDiv("attachments");
+    for (const item of list) {
+      if (item.kind === "image" && item.preview) {
+        const img = document.createElement("img");
+        img.className = "attachment-thumb";
+        img.src = item.preview;
+        img.addEventListener("click", () => openLightbox(item.preview, item.name || "Image", null));
+        wrap.appendChild(img);
+      } else {
+        const pill = document.createElement("span");
+        pill.className = "attachment-pill";
+        pill.textContent = item.name || "attachment";
+        pill.title = item.name || "";
+        wrap.appendChild(pill);
+      }
+    }
+    scrollToBottom();
+  };
+
+  /* ---- visualizations: inline card with expand + save ---- */
+  window.chatShowViz = function (dataURL, title, caption, path) {
+    const card = addDiv("viz-card");
+
+    const header = document.createElement("div");
+    header.className = "viz-header";
+    const titleEl = document.createElement("span");
+    titleEl.className = "viz-title";
+    titleEl.textContent = title;
+    header.appendChild(titleEl);
+
+    const expand = document.createElement("button");
+    expand.textContent = "Expand";
+    expand.addEventListener("click", () => openLightbox(dataURL, title, path));
+    header.appendChild(expand);
+
+    const save = document.createElement("button");
+    save.textContent = "Save PNG…";
+    save.addEventListener("click", () => bridge({ type: "saveViz", path: path, title: title }));
+    header.appendChild(save);
+    card.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "viz-body";
+    const img = document.createElement("img");
+    img.src = dataURL;
+    img.alt = title;
+    img.addEventListener("click", () => openLightbox(dataURL, title, path));
+    body.appendChild(img);
+    card.appendChild(body);
+
+    if (caption) {
+      const cap = document.createElement("div");
+      cap.className = "viz-caption";
+      cap.textContent = caption;
+      card.appendChild(cap);
+    }
+    scrollToBottom();
+  };
+
+  /* ---- lightbox ---- */
+  const lightbox = document.getElementById("lightbox");
+  const lightboxImg = document.getElementById("lightbox-img");
+  const lightboxTitle = document.getElementById("lightbox-title");
+  const lightboxSave = document.getElementById("lightbox-save");
+  let lightboxPath = null;
+
+  function openLightbox(src, title, path) {
+    lightboxImg.src = src;
+    lightboxTitle.textContent = title || "";
+    lightboxPath = path;
+    lightboxSave.style.display = path ? "" : "none";
+    lightbox.classList.add("open");
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove("open");
+    lightboxImg.src = "";
+    lightboxPath = null;
+  }
+
+  lightbox.addEventListener("click", (event) => {
+    if (event.target === lightbox || event.target === lightboxImg) closeLightbox();
+  });
+  document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
+  lightboxSave.addEventListener("click", () => {
+    if (lightboxPath) bridge({ type: "saveViz", path: lightboxPath, title: lightboxTitle.textContent });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeLightbox();
+  });
+
+  /* ---- change summary: what the turn wrote to the library -------------------
+   * One card per journal turn, appended when the turn ends and refreshed in place
+   * afterwards — in Propose mode the writes only land when the user accepts, which
+   * is after the reply has finished streaming. */
+
+  function findWriteCard(turnID) {
+    for (const el of messages.querySelectorAll(".write-summary")) {
+      if (el.dataset.turn === turnID) return el;
+    }
+    return null;
+  }
+
+  window.chatWriteSummary = function (payload) {
+    const existing = findWriteCard(payload.turnID);
+    // A refresh must not close rows the user has open, so remember them by write id.
+    const openRows = new Set();
+    if (existing) {
+      for (const row of existing.querySelectorAll(".ws-item[open]")) openRows.add(row.dataset.write);
+    }
+    const card = existing || document.createElement("details");
+    if (!existing) {
+      card.className = "write-summary";
+      card.dataset.turn = payload.turnID;
+      messages.appendChild(card);
+    }
+    card.replaceChildren(writeSummaryHead(payload), writeSummaryBody(payload, openRows));
+    keepStatusLast();
+    if (!existing) scrollToBottom();
+  };
+
+  /* The turn has been undone; nothing is left to expand or to revert. */
+  window.chatWriteTurnReverted = function (turnID, label) {
+    const card = findWriteCard(turnID);
+    if (!card) return;
+    const note = document.createElement("div");
+    note.className = "write-reverted";
+    note.textContent = "↩︎ " + label;
+    card.replaceWith(note);
+  };
+
+  function writeSummaryHead(payload) {
+    const head = document.createElement("summary");
+    const headline = document.createElement("span");
+    headline.className = "ws-headline";
+    headline.textContent = payload.summary || "";
+    head.appendChild(headline);
+
+    const revert = document.createElement("button");
+    revert.type = "button";
+    revert.className = "ws-revert";
+    revert.textContent = "Revert";
+    revert.title = payload.revertHint || "";
+    revert.addEventListener("click", (event) => {
+      // The button sits in the <summary>: without this, reverting also toggles the card.
+      event.preventDefault();
+      event.stopPropagation();
+      bridge({ type: "revertWriteTurn", turnID: payload.turnID });
+    });
+    head.appendChild(revert);
+    return head;
+  }
+
+  function writeSummaryBody(payload, openRows) {
+    const body = document.createElement("div");
+    body.className = "ws-body";
+    for (const item of payload.items || []) body.appendChild(writeRow(item, openRows));
+    return body;
+  }
+
+  function writeRow(item, openRows) {
+    const row = document.createElement("details");
+    row.className = "ws-item";
+    row.dataset.write = item.writeID;
+    if (openRows.has(item.writeID)) row.open = true;
+
+    const head = document.createElement("summary");
+    const badge = document.createElement("span");
+    badge.className = "ws-badge " + (item.action === "create" ? "create" : "update");
+    badge.textContent = item.action === "create" ? "New" : "Edited";
+    head.appendChild(badge);
+
+    // The same click target the transcript uses, so the item opens in the side inspector.
+    const id = document.createElement("code");
+    id.className = "item-ref";
+    id.dataset.item = item.itemID;
+    id.textContent = item.itemID;
+    id.title = "Open " + item.itemID;
+    head.appendChild(id);
+
+    const name = document.createElement("span");
+    name.className = "ws-name";
+    setRenderedContent(name, renderInlineMath(item.name || ""));
+    head.appendChild(name);
+
+    const type = document.createElement("span");
+    type.className = "ws-type";
+    // "2 of 2" only when the turn wrote this item more than once, so two rows for one
+    // id read as successive steps rather than as a duplicate.
+    type.textContent = item.step ? item.type + " · " + item.step : item.type;
+    head.appendChild(type);
+    row.appendChild(head);
+
+    const diff = document.createElement("div");
+    diff.className = "ws-diff";
+    renderDiffBlocks(diff, item.blocks || []);
+    row.appendChild(diff);
+    return row;
+  }
+
+  /* Two kinds of run fold away, so what is left on screen is the mathematics that
+   * moved: stretches of untouched text, and the wall of frontmatter every create
+   * necessarily adds (whose id, name and type the row header already states). */
+  const FOLDS = {
+    unchanged: { least: 3, label: (n) => n + " unchanged blocks" },
+    frontmatter: { least: 4, label: (n) => n + " frontmatter fields" },
+  };
+
+  function foldGroup(block) {
+    if (block.kind === "unchanged") return "unchanged";
+    if (block.field) return "frontmatter";
+    return null;
+  }
+
+  function renderDiffBlocks(container, blocks) {
+    let group = null;
+    let run = [];
+
+    function flush() {
+      if (run.length === 0) return;
+      const fold = FOLDS[group];
+      if (fold && run.length >= fold.least) {
+        container.appendChild(foldedRun(fold.label(run.length), run));
+      } else {
+        for (const block of run) container.appendChild(diffBlock(block));
+      }
+      run = [];
+    }
+
+    for (const block of blocks) {
+      const next = foldGroup(block);
+      if (next !== group) { flush(); group = next; }
+      run.push(block);
+    }
+    flush();
+
+    if (!container.firstChild) {
+      const empty = document.createElement("div");
+      empty.className = "ws-empty";
+      empty.textContent = "The write left the item's content exactly as it was.";
+      container.appendChild(empty);
+    }
+  }
+
+  function foldedRun(label, blocks) {
+    const fold = document.createElement("details");
+    fold.className = "ws-context";
+    const head = document.createElement("summary");
+    head.textContent = label;
+    fold.appendChild(head);
+    for (const block of blocks) fold.appendChild(diffBlock(block));
+    return fold;
+  }
+
+  function diffBlock(block) {
+    const el = document.createElement("div");
+    el.className = "diff-block " + block.kind;
+    if (block.kind === "changed") {
+      // Both versions whole and one above the other: an equation that was corrected has
+      // to be readable on both sides, which a line-level diff of it could never be.
+      el.appendChild(diffSide("before", block, block.before));
+      el.appendChild(diffSide("after", block, block.after));
+      const words = wordBar(block);
+      if (words) el.appendChild(words);
+    } else {
+      el.appendChild(diffSide(block.kind, block,
+                              block.kind === "removed" ? block.before : block.after));
+    }
+    return el;
+  }
+
+  function diffSide(role, block, text) {
+    const side = document.createElement("div");
+    side.className = "diff-side " + role;
+    if (block.field) {
+      // Frontmatter is a record, not prose: markdown rules would only mangle `[a, b]`.
+      const key = document.createElement("span");
+      key.className = "diff-key";
+      key.textContent = block.label + ":";
+      side.appendChild(key);
+      const value = document.createElement("span");
+      setRenderedContent(value, renderInlineMath(text || ""));
+      side.appendChild(value);
+    } else {
+      const content = document.createElement("div");
+      setRenderedContent(content, renderMarkdownWithMath(text || ""));
+      side.appendChild(content);
+    }
+    return side;
+  }
+
+  /* Offered only when the two versions have words in common. A short frontmatter value
+   * replaced outright ("conjecture" → "proof-drafted") has nothing to highlight: the
+   * word view would just say the same thing as the two coloured blocks above it. */
+  function wordBar(block) {
+    const shared = (block.wordsBefore || []).some((run) => run.k === "same");
+    if (!shared) return null;
+    const bar = document.createElement("div");
+    bar.className = "ws-wordbar";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Word changes";
+    button.title = "Highlight the edit word by word, on the source";
+    let view = null;
+    button.addEventListener("click", () => {
+      if (view) {
+        view.remove();
+        view = null;
+        button.textContent = "Word changes";
+        return;
+      }
+      view = document.createElement("div");
+      view.className = "ws-words";
+      view.appendChild(wordLine("was", block.wordsBefore));
+      view.appendChild(wordLine("now", block.wordsAfter));
+      bar.appendChild(view);
+      button.textContent = "Hide word changes";
+    });
+    bar.appendChild(button);
+    return bar;
+  }
+
+  /* Source text only — set with textContent, so nothing here is ever parsed as markup. */
+  function wordLine(label, runs) {
+    const line = document.createElement("pre");
+    line.className = "ws-wordline";
+    const tag = document.createElement("span");
+    tag.className = "ws-wordtag";
+    tag.textContent = label;
+    line.appendChild(tag);
+    for (const run of runs || []) {
+      const span = document.createElement("span");
+      if (run.k === "removed") span.className = "word-del";
+      else if (run.k === "added") span.className = "word-add";
+      span.textContent = run.t;
+      line.appendChild(span);
+    }
+    return line;
+  }
+
+  /* A pill marking a theory item the user pinned as this chat's focus. */
+  window.chatContextNote = function (text) {
+    const el = addDiv("context-note");
+    el.textContent = text;
+    scrollToBottom();
+  };
+
+  window.chatError = function (text) {
+    const el = addDiv("error-note");
+    el.textContent = text;
+    currentEl = null;
+    scrollToBottom();
+  };
+})();
+</script>
+</body>
+</html>

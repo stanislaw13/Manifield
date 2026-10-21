@@ -1,0 +1,132 @@
+name: Manifield
+options:
+  bundleIdPrefix: com.manifield
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  ManifieldCore:
+    path: Packages/ManifieldCore
+  ManifieldAgents:
+    path: Packages/ManifieldAgents
+  ManifieldSandbox:
+    path: Packages/ManifieldSandbox
+  # A leaf: depends on none of the others, so Core/Agents/Sandbox can adopt the logger
+  # later without a cycle.
+  ManifieldDiagnostics:
+    path: Packages/ManifieldDiagnostics
+  SwiftMath:
+    url: https://github.com/mgriebling/SwiftMath
+    from: 1.6.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
+
+targets:
+  Manifield:
+    type: application
+    platform: macOS
+    sources:
+      - path: Manifield/Sources
+      - path: Manifield/Resources/Assets.xcassets
+      - path: Manifield/Resources/web
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: ManifieldCore
+      - package: ManifieldAgents
+      - package: ManifieldSandbox
+      - package: ManifieldDiagnostics
+      - package: SwiftMath
+      - package: Sparkle
+    # Manifield/Info.plist is GENERATED from the properties below — edit them here, not
+    # the plist. It exists because Sparkle's keys cannot be set any other way:
+    # INFOPLIST_KEY_* build settings only carry keys Xcode knows about (verified — with
+    # INFOPLIST_KEY_SUFeedURL set, the built Info.plist had no SUFeedURL at all, while
+    # the three Apple keys beside it came through). An explicit plist also lets
+    # SUEnableAutomaticChecks be a real boolean rather than the string "YES".
+    # GENERATE_INFOPLIST_FILE stays on: Xcode merges its synthesized CFBundle* keys
+    # (versions from MARKETING_VERSION / CURRENT_PROJECT_VERSION) into this file.
+    info:
+      path: Manifield/Info.plist
+      properties:
+        # XcodeGen's plist defaults hardcode CFBundleShortVersionString 1.0 / CFBundleVersion 1.
+        # Point them back at the build settings, or the app ships as "1.0 (1)" forever and
+        # Sparkle never sees a newer build.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.education
+        # Manifield is free software under GPLv3; the full text ships as LICENSE.
+        NSHumanReadableCopyright: "Copyright © 2026 Stanisław Michalik. Free software under the GNU General Public License v3."
+        NSDocumentsFolderUsageDescription: "Manifield keeps your projects in your Documents folder."
+        # Sparkle. SUPublicEDKey is the PUBLIC half of the EdDSA pair; the private key
+        # never leaves the maintainer's Keychain. Builds from source check the same feed.
+        SUFeedURL: "https://updates.manifield.net/appcast.xml"
+        SUPublicEDKey: "lJ2w1VBgMH/uvRh8u9+VTLOu3hbEdQvz91PRSzQm16U="
+        # Opt testers in by default instead of showing Sparkle's first-launch permission
+        # prompt. Settings › General carries the opt-out.
+        SUEnableAutomaticChecks: true
+    # Sparkle's helpers arrive ad-hoc signed and Xcode's embed phase does not reach them.
+    # Post-build phases run before the build system signs the .app, so this signs the
+    # helpers and the framework and lets Xcode seal the app over the result.
+    postBuildScripts:
+      - name: Sign Sparkle helpers
+        path: Scripts/sign_sparkle_helpers.sh
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.manifield.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        DEAD_CODE_STRIPPING: YES
+        DEVELOPMENT_TEAM: M5C7JFJQJ7
+        MARKETING_VERSION: "0.1.2"
+        CURRENT_PROJECT_VERSION: "3"
+      configs:
+        # Local builds sign for development: no Developer ID certificate needed for
+        # day-to-day work, and no keychain prompt on every build.
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+        # Distribution builds are signed manually with Developer ID. Automatic signing
+        # resolves to a development certificate and conflicts with this identity.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          PROVISIONING_PROFILE_SPECIFIER: ""
+
+  ManifieldTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Manifield/Tests
+    dependencies:
+      - target: Manifield
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        # The test bundle is dlopen'd into the host app, and macOS refuses to map an
+        # ad-hoc signed bundle into a team-signed process: "mapping process and mapped
+        # file (non-platform) have different Team IDs". Since the app target carries
+        # DEVELOPMENT_TEAM, the tests have to carry the same one, or every run dies
+        # loading the bundle before a single test executes.
+        DEVELOPMENT_TEAM: M5C7JFJQJ7
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+
+schemes:
+  Manifield:
+    build:
+      targets:
+        Manifield: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ManifieldTests

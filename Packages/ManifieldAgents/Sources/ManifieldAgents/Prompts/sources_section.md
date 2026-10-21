@@ -1,0 +1,4 @@
+Attached literature sources (established results you may rely on):
+{{SOURCE_LINES}}
+Use search_sources / read_source_item to find and read exact statements before relying on them — never cite literature from memory. Reference source items in depends_on as 'source-slug:item-id'. Never invent such a reference.
+Search a source in the language it is written in (named per source above), which is not necessarily the language of this conversation: matching is literal, so English terms return nothing from a Polish text and you would wrongly conclude the source is silent on the question. Translate the terms yourself — keep proper names, symbols and standard Latin terminology as they are written — and when an empty result looks surprising, retry in the source's language before reporting nothing was found. Answer the user in their language regardless of what you searched in.

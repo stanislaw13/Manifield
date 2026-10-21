@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a PR cancels the run still in flight for the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: swift test (${{ matrix.package }})
+    # macos-26 is GitHub's Apple-silicon image; its default Xcode is 26.x, which is
+    # what the app requires. Pin a specific Xcode with `sudo xcode-select -s` here if
+    # a future default ever moves past what the project supports.
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [ManifieldCore, ManifieldAgents, ManifieldSandbox, ManifieldDiagnostics]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: swift test
+        working-directory: Packages/${{ matrix.package }}
+        run: swift test
+
+  build:
+    name: build app
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # project.yml is the source of truth; the checked-in .xcodeproj is regenerated
+      # from it so a stale project file can never mask a broken build.
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # CODE_SIGNING_ALLOWED=NO: the runner has no signing identity, and "does it
+      # build" does not need one.
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Manifield.xcodeproj \
+            -scheme Manifield \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build

@@ -1,0 +1,23 @@
+.DS_Store
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+*.xcuserstate
+
+# Release artifacts (archives, exported apps, DMGs)
+build/
+
+# Opening an example in Manifield writes derived, rebuildable state next to it:
+# the search index, the graph cache, chat sessions and run artifacts.
+examples/*/*/index.sqlite
+examples/*/*/graph.json
+examples/*/*/sessions/
+examples/*/*/artifacts/
+
+# Never commit a Sparkle signing key.
+sparkle-private-key*
+*.private-key
+
+# wrangler (Cloudflare) leaves this behind
+.wrangler/

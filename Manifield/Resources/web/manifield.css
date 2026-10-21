@@ -1,0 +1,107 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0071e3;
+  --card: #f5f5f7;
+  --border: #d2d2d7;
+  --user-bubble: #e8f0fe;
+  --error: #d70015;
+
+  /* Graph node palette: hue encodes the type family (status is encoded as
+     solidity/glow, not color). Keyed by ShapeFamily raw values + the synthetic
+     literature family + tag nodes. graph.html reads these via getComputedStyle,
+     so the canvas and the in-page legend share one source of truth. */
+  --graph-definition-like: #0e8a99;
+  --graph-main-result: #c07f0a;
+  --graph-supporting: #4a63d2;
+  --graph-open: #8a54d6;
+  --graph-meta: #7c8f78;
+  --graph-source-ref: #9a6b38;
+  --graph-figure: #b4603f;
+  --graph-tag: #a96a85;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --fg: #f5f5f7;
+    --muted: #98989d;
+    --accent: #2997ff;
+    --card: #2c2c2e;
+    --border: #3a3a3c;
+    --user-bubble: #263850;
+    --error: #ff453a;
+
+    --graph-definition-like: #43c2d1;
+    --graph-main-result: #eab84e;
+    --graph-supporting: #7e97f5;
+    --graph-open: #b28cf2;
+    --graph-meta: #9cb098;
+    --graph-source-ref: #c69a68;
+    --graph-figure: #e0906d;
+    --graph-tag: #c793ac;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.55 -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3 { font-weight: 600; line-height: 1.25; }
+h2 { font-size: 1.15em; margin: 1.2em 0 0.4em; }
+a { color: var(--accent); }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--card);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+pre {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; }
+blockquote {
+  margin: 0.6em 0;
+  padding: 0.1em 1em;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+
+/* Figures. The image is served by the manifield-figure scheme handler, so it is always
+   a local file of the open project — but it can be any size, and a 4000px render must
+   not push the column wide. Sized to the text measure, centred, on a card that reads as
+   a plate rather than an inline decoration. */
+img {
+  max-width: 100%;
+  height: auto;
+}
+p > img {
+  display: block;
+  margin: 1em auto 0.4em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.katex { font-size: 1.06em; }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.math-error {
+  color: var(--error);
+  background: var(--card);
+  border: 1px dashed var(--error);
+  border-radius: 4px;
+  padding: 0 4px;
+}

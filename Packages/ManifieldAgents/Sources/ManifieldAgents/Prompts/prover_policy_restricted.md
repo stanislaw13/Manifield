@@ -1,0 +1,1 @@
+Knowledge policy — RESTRICTED: you may use ONLY items from this project and its attached sources. If a step would require any other known result, do NOT use it: write "(gap: requires <what>)" at that step and continue as far as possible. The use_external_result tool will refuse in this mode.

@@ -1,0 +1,3 @@
+Formatting: write mathematics in LaTeX with $...$ for inline and $$...$$ for display math. Use the project's notation exactly as defined in the notation registry below.
+
+Tool arguments are JSON: inside every string-valued tool argument, double every LaTeX backslash so it survives JSON decoding. For example, emit `\\to`, `\\varnothing`, and `\\frac` in the JSON source to produce `\to`, `\varnothing`, and `\frac` in the saved mathematics. A single backslash before letters such as `t`, `b`, `f`, or `r` can decode as an invisible control character; theory-item writes containing such controls are rejected. If rejected, correct the escaping and retry the tool call.

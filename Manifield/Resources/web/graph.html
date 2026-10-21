@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="manifield.css">
+<style>
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  body { user-select: none; -webkit-user-select: none; }
+  #graph {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    cursor: default;
+    touch-action: none;
+  }
+  /* KaTeX node labels live in an HTML overlay — canvas cannot render KaTeX. */
+  #labels {
+    position: fixed; inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 2;
+    font-size: 12px;
+  }
+  .node-label {
+    position: absolute; left: 0; top: 0;
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.25;
+    color: var(--fg);
+    text-shadow: 0 0 3px var(--bg), 0 1px 5px var(--bg), 0 0 9px var(--bg);
+    will-change: transform, opacity;
+  }
+  .node-label .sub { display: block; font-size: 0.82em; color: var(--muted); }
+  .node-label.tag-label { color: var(--graph-tag); font-weight: 500; font-size: 0.9em; }
+  #tooltip {
+    position: fixed;
+    display: none;
+    max-width: 380px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    padding: 10px 14px;
+    pointer-events: none;
+    z-index: 10;
+    font-size: 13px;
+  }
+  #tooltip .tt-title { font-weight: 600; margin-bottom: 2px; }
+  #tooltip .tt-meta { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+  #empty {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    color: var(--muted);
+    z-index: 1;
+  }
+  #ctxmenu {
+    position: fixed;
+    display: none;
+    z-index: 20;
+    min-width: 172px;
+    padding: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+    font-size: 12.5px;
+  }
+  #ctxmenu .ctx-item {
+    display: block; width: 100%;
+    padding: 5px 10px;
+    border: none; border-radius: 5px;
+    background: none;
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    cursor: default;
+    white-space: nowrap;
+  }
+  #ctxmenu .ctx-item:hover { background: var(--accent); color: #fff; }
+  #ctxmenu .ctx-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+  #ctxmenu .ctx-head {
+    padding: 4px 10px 5px;
+    color: var(--muted);
+    font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 240px;
+  }
+  /* Floating legend — single source of truth with the canvas palette via CSS vars. */
+  #legend {
+    position: fixed; left: 12px; bottom: 12px;
+    display: none;
+    z-index: 5;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    padding: 9px 12px 8px;
+    font-size: 10.5px;
+    color: var(--muted);
+    pointer-events: none;
+    line-height: 1.35;
+  }
+  #legend .lg-families {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 3px 14px;
+  }
+  #legend .lg-row { display: flex; align-items: center; gap: 6px; }
+  #legend .lg-swatch {
+    width: 9px; height: 9px; border-radius: 50%;
+    flex: none;
+  }
+  #legend .lg-solidity {
+    display: flex; align-items: flex-end; gap: 12px;
+    margin-top: 8px; padding-top: 7px;
+    border-top: 1px solid var(--border);
+  }
+  #legend .lg-tier {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 9px;
+  }
+  #legend .lg-dot { width: 10px; height: 10px; border-radius: 50%; }
+  #legend .lg-dot.ghost {
+    background: color-mix(in srgb, var(--graph-supporting) 12%, transparent);
+    border: 1.5px solid var(--graph-supporting);
+  }
+  #legend .lg-dot.mid {
+    background: color-mix(in srgb, var(--graph-supporting) 45%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+  }
+  #legend .lg-dot.solid {
+    background: var(--graph-supporting);
+    border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+  }
+  #legend .lg-dot.glow {
+    background: var(--graph-supporting);
+    border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+    box-shadow: 0 0 7px 1px color-mix(in srgb, var(--graph-supporting) 75%, transparent);
+  }
+  #legend .lg-tagchip { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+  #legend .lg-tagswatch {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px dashed var(--graph-tag);
+    flex: none;
+  }
+  /* View settings — the legend's card, opposite corner, but interactive. */
+  #settings {
+    position: fixed; right: 12px; top: 12px;
+    display: none;
+    z-index: 6;
+    width: 214px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    font-size: 11px;
+    color: var(--fg);
+    overflow: hidden;
+  }
+  #settings .st-head {
+    display: flex; align-items: center; gap: 6px;
+    user-select: none;
+    padding: 7px 8px 7px 11px;
+    color: var(--muted);
+    font-size: 10.5px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    cursor: default;
+  }
+  #settings .st-head .st-spacer { flex: 1; }
+  #settings .st-chevron {
+    border: none; background: none; color: var(--muted);
+    font: inherit; font-size: 10px;
+    padding: 2px 4px; border-radius: 4px;
+    cursor: default;
+    transition: transform 120ms ease;
+  }
+  #settings .st-chevron:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  #settings.collapsed .st-chevron { transform: rotate(-90deg); }
+  #settings.collapsed #st-body { display: none; }
+  #settings .st-group { border-top: 1px solid var(--border); }
+  #settings .st-group > summary {
+    list-style: none;
+    padding: 6px 11px;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: default;
+    display: flex; align-items: center; gap: 5px;
+  }
+  #settings .st-group > summary::-webkit-details-marker { display: none; }
+  #settings .st-group > summary::before {
+    content: "\25B8";
+    display: inline-block;
+    font-size: 9px;
+    transition: transform 120ms ease;
+  }
+  #settings .st-group[open] > summary::before { transform: rotate(90deg); }
+  #settings .st-group > summary:hover { color: var(--fg); }
+  #settings .st-rows { padding: 2px 11px 9px; }
+  #settings .st-row { display: block; margin-bottom: 7px; }
+  #settings .st-row:last-child { margin-bottom: 2px; }
+  #settings .st-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    color: var(--muted);
+    margin-bottom: 1px;
+  }
+  #settings .st-value { font-variant-numeric: tabular-nums; }
+  #settings input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px; margin: 3px 0 0;
+    border-radius: 2px;
+    background: var(--border);
+    accent-color: var(--accent);
+  }
+  #settings input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--card);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 18%, transparent);
+  }
+  #settings select {
+    width: 100%;
+    margin-top: 2px;
+    padding: 3px 5px;
+    font: inherit;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+  }
+  #settings .st-reset {
+    display: block; width: calc(100% - 22px);
+    margin: 0 11px 10px;
+    padding: 4px;
+    font: inherit;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: default;
+  }
+  #settings .st-reset:hover { color: var(--fg); border-color: var(--muted); }
+</style>
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="vendor/d3-dispatch.min.js"></script>
+<script src="vendor/d3-quadtree.min.js"></script>
+<script src="vendor/d3-timer.min.js"></script>
+<script src="vendor/d3-force.min.js"></script>
+<script src="render.js"></script>
+</head>
+<body>
+<canvas id="graph"></canvas>
+<div id="labels"></div>
+<div id="legend">
+  <div class="lg-families">
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-definition-like)"></span>Definitions &amp; axioms</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-open)"></span>Open questions</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-main-result)"></span>Main results</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-meta)"></span>Remarks &amp; examples</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-supporting)"></span>Supporting results</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-figure)"></span>Figures</div>
+    <div class="lg-row"><span class="lg-swatch" style="background: var(--graph-source-ref)"></span>Literature</div>
+  </div>
+  <div class="lg-solidity">
+    <div class="lg-tier"><span class="lg-dot ghost"></span>conjectured</div>
+    <div class="lg-tier"><span class="lg-dot mid"></span>drafted</div>
+    <div class="lg-tier"><span class="lg-dot solid"></span>reviewed</div>
+    <div class="lg-tier"><span class="lg-dot glow"></span>approved+</div>
+    <div class="lg-tagchip"><span class="lg-tagswatch"></span>#tag</div>
+  </div>
+</div>
+<div id="settings">
+  <div class="st-head"><span>View settings</span><span class="st-spacer"></span><button class="st-chevron" title="Collapse">&#9662;</button></div>
+  <div id="st-body">
+    <details class="st-group" open>
+      <summary>Display</summary>
+      <div class="st-rows">
+        <label class="st-row">
+          <span class="st-label">Trace mode</span>
+          <select id="st-mode">
+            <option value="none">Off</option>
+            <option value="ancestors">What it needs</option>
+            <option value="descendants">What builds on it</option>
+          </select>
+        </label>
+        <label class="st-row">
+          <span class="st-label">Label fade-in<span class="st-value" data-out="labelZoom"></span></span>
+          <input type="range" id="st-labelZoom" min="0.3" max="2.5" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Node size<span class="st-value" data-out="nodeScale"></span></span>
+          <input type="range" id="st-nodeScale" min="0.5" max="2.2" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Link thickness<span class="st-value" data-out="linkWidth"></span></span>
+          <input type="range" id="st-linkWidth" min="0.3" max="3" step="0.05">
+        </label>
+      </div>
+    </details>
+    <details class="st-group">
+      <summary>Forces</summary>
+      <div class="st-rows">
+        <label class="st-row">
+          <span class="st-label">Link length<span class="st-value" data-out="linkDistance"></span></span>
+          <input type="range" id="st-linkDistance" min="0.3" max="3" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Repulsion<span class="st-value" data-out="charge"></span></span>
+          <input type="range" id="st-charge" min="0.2" max="3" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Level spacing<span class="st-value" data-out="levelSpacing"></span></span>
+          <input type="range" id="st-levelSpacing" min="0.3" max="2.5" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Centering pull<span class="st-value" data-out="gravity"></span></span>
+          <input type="range" id="st-gravity" min="0" max="3" step="0.05">
+        </label>
+        <label class="st-row">
+          <span class="st-label">Node spacing<span class="st-value" data-out="collide"></span></span>
+          <input type="range" id="st-collide" min="0" max="5" step="0.1">
+        </label>
+      </div>
+    </details>
+    <button class="st-reset" id="st-reset">Reset to defaults</button>
+  </div>
+</div>
+<div id="tooltip"></div>
+<div id="ctxmenu"></div>
+<div id="empty">No theory items yet — import a LaTeX file or ask Prismo to propose one.</div>
+<script>
+(function () {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const LEVEL_SPACING = 100;      // world px between topological depth levels
+  const PULSE_PERIOD_MS = 3200;   // trace pulse travel time along one edge
+  const LOOSE_Y = 190;            // where items with no dependencies pool (below the roots)
+  const TAG_PREFIX = "##tag##";
+  const TAG_RADIUS = 6;
+
+  /* ── View settings ────────────────────────────────────────────────────────
+     Every entry is a multiplier on the tuned baseline above/below, so 1 is
+     exactly the layout this graph has always drawn. The app owns persistence:
+     it pushes the saved values in via setGraphSettings and stores whatever the
+     panel posts back. */
+  const SETTING_DEFAULTS = {
+    labelZoom: 1,      // zoom at which node labels fade in (lower = sooner)
+    nodeScale: 1,      // node radius
+    linkWidth: 1,      // edge thickness
+    linkDistance: 1,   // preferred edge length
+    charge: 1,         // node-to-node repulsion
+    levelSpacing: 1,   // vertical gap between topological depth levels
+    gravity: 1,        // pull toward the layout's home position
+    collide: 1,        // padding kept between node bodies
+  };
+  const SETTING_RANGE = {
+    labelZoom: [0.3, 2.5], nodeScale: [0.5, 2.2], linkWidth: [0.3, 3],
+    linkDistance: [0.3, 3], charge: [0.2, 3], levelSpacing: [0.3, 2.5],
+    gravity: [0, 3], collide: [0, 5],
+  };
+  const FORCE_SETTINGS = new Set(["linkDistance", "charge", "levelSpacing", "gravity", "collide"]);
+  const S = Object.assign({}, SETTING_DEFAULTS);
+
+  const levelGap = () => LEVEL_SPACING * S.levelSpacing;
+
+  const canvas = document.getElementById("graph");
+  const ctx = canvas.getContext("2d");
+  const labelsEl = document.getElementById("labels");
+  const tooltip = document.getElementById("tooltip");
+  const ctxmenu = document.getElementById("ctxmenu");
+  const legendEl = document.getElementById("legend");
+  const settingsEl = document.getElementById("settings");
+  const emptyEl = document.getElementById("empty");
+
+  function post(message) {
+    if (window.webkit?.messageHandlers?.manifieldBridge) {
+      window.webkit.messageHandlers.manifieldBridge.postMessage(message);
+    }
+  }
+
+  /* ── Theme palette ─────────────────────────────────────────────────────────
+     All colors come from CSS custom properties so light/dark stay in sync with
+     the legend; re-read on every appearance change, never baked in. */
+
+  const FAMILIES = ["definition-like", "main-result", "supporting", "open", "meta", "figure", "source-ref"];
+  let css = null;
+  let themeGen = 0;
+  const shadeCache = new Map();
+  const glowSprites = new Map();
+
+  function hexToRgb(hex) {
+    let h = String(hex).trim().replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const n = parseInt(h.slice(0, 6), 16);
+    if (Number.isNaN(n)) return [128, 128, 128];
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgba(rgb, a) {
+    return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + Math.max(0, Math.min(1, a)) + ")";
+  }
+  function rgbToHsl([r, g, b]) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return [h * 360, s * 100, l * 100];
+  }
+  function hslToRgb([h, s, l]) {
+    h = ((h % 360) + 360) % 360 / 360; s /= 100; l /= 100;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const f = (t) => {
+      t = ((t % 1) + 1) % 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    return [Math.round(f(h + 1 / 3) * 255), Math.round(f(h) * 255), Math.round(f(h - 1 / 3) * 255)];
+  }
+
+  function readPalette() {
+    const style = getComputedStyle(document.documentElement);
+    const v = (name, fallback) => (style.getPropertyValue(name) || "").trim() || fallback;
+    css = {
+      bg: hexToRgb(v("--bg", "#ffffff")),
+      fg: hexToRgb(v("--fg", "#1d1d1f")),
+      muted: hexToRgb(v("--muted", "#6e6e73")),
+      accent: hexToRgb(v("--accent", "#0071e3")),
+      tag: hexToRgb(v("--graph-tag", "#a96a85")),
+      family: {},
+    };
+    for (const f of FAMILIES) css.family[f] = hexToRgb(v("--graph-" + f, "#888888"));
+    shadeCache.clear();
+    glowSprites.clear();
+    themeGen++;
+  }
+
+  /* Mirrors ItemType.shapeFamily in TheoryItem.swift; a type's position within its
+     family drives a subtle lightness/saturation step off the family hue. Unknown
+     types fall back to the plain family color. */
+  const FAMILY_TYPES = {
+    "definition-like": ["definition", "axiom", "postulate"],
+    "main-result": ["theorem", "main-theorem", "corollary"],
+    supporting: ["lemma", "proposition", "claim", "fact", "observation",
+                 "identity", "inequality", "formula", "law", "principle", "algorithm"],
+    open: ["conjecture", "hypothesis", "problem", "open-problem", "question"],
+    meta: ["remark", "example", "exercise"],
+    figure: ["figure"],
+    "source-ref": ["source-ref"],
+  };
+
+  function typeRgb(family, type) {
+    const key = family + "/" + type;
+    const cached = shadeCache.get(key);
+    if (cached) return cached;
+    const base = css.family[family] || css.muted;
+    const list = FAMILY_TYPES[family] || [];
+    const i = list.indexOf(type);
+    let out = base;
+    if (i >= 0 && list.length > 1) {
+      const offset = i - (list.length - 1) / 2;
+      const step = Math.min(4, 22 / list.length);
+      const hsl = rgbToHsl(base);
+      hsl[2] = Math.max(16, Math.min(88, hsl[2] + offset * step));
+      hsl[1] = Math.max(10, Math.min(96, hsl[1] - offset * step * 0.45));
+      out = hslToRgb(hsl);
+    }
+    shadeCache.set(key, out);
+    return out;
+  }
+
+  /* ── Node sizing & solidity ──────────────────────────────────────────────── */
+
+  const TYPE_RADIUS = {
+    "main-theorem": 20, theorem: 14, corollary: 13,
+    definition: 11, axiom: 11.5, postulate: 11,
+    lemma: 10.5, proposition: 11, law: 10.5, principle: 10.5, algorithm: 10.5,
+    claim: 10, fact: 10, observation: 10, identity: 10, inequality: 10, formula: 10,
+    conjecture: 10.5, hypothesis: 10, problem: 10, "open-problem": 10.5, question: 9.5,
+    remark: 7, example: 7.5, exercise: 7,
+    figure: 9,
+    "source-ref": 9,
+  };
+
+  const STATUS_RANKS = {
+    conjecture: 0, tested: 1, "proof-drafted": 2, "reviewed-no-errors": 3,
+    "human-approved": 4, source: 5, "formally-verified": 6,
+    // Off the ladder; Swift reports figures at the settled tier so they draw solid.
+    illustration: 3,
+  };
+  function fillAlphaFor(rank) {
+    return rank <= 0 ? 0.10 : rank === 1 ? 0.35 : rank === 2 ? 0.55 : 1;
+  }
+  function glowFor(rank) { return rank === 4 ? 0.34 : rank === 6 ? 0.6 : 0; }
+
+  /* ── State ───────────────────────────────────────────────────────────────── */
+
+  const nodes = new Map();       // id -> node object (items + tags); identity persists
+  let itemEdges = [];            // full dependency edge list, raw ids
+  let sim = null, linkForce = null;
+  let simNodes = [], simLinks = [];
+  let linkCountMap = new Map();
+  let adjacency = new Map();     // id -> Set(neighbor ids) among current links
+  let exitingLinks = [];
+  let exiting = [];              // nodes fading out (no longer simulated)
+  const posCache = new Map();    // positions of nodes removed from `nodes`
+
+  let filter = null;
+  let tagsVisible = true;
+  let traceReq = null;           // {id, mode} as requested by Swift
+  let trace = null;              // {nodes:Set, edges:Set}
+  let tagEmphasis = null;
+  let emphMembers = null;
+  let selectedId = null;
+  let hoverId = null;
+  let isolation = null;          // Set of ids kept when isolating (hard hide), or null
+  let hasGraph = false;
+  let globalFade = 1, globalFadeT = 1;
+  let scopeKey = null;           // which store the drawn graph belongs to
+
+  const cam = { x: 0, y: 0, k: 1 };
+  let camAnim = null;
+
+  let DPR = window.devicePixelRatio || 1;
+  let W = window.innerWidth, H = window.innerHeight;
+
+  const sid = (x) => (typeof x === "object" && x !== null ? x.id : x);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeCubicInOut = (t) =>
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  function hash01(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 8) % 100000) / 100000;
+  }
+  function escapeHTML(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  }
+
+  /* ── Graph structure ─────────────────────────────────────────────────────── */
+
+  function makeItemNode(id) {
+    return {
+      id, isTag: false,
+      x: NaN, y: NaN, vx: 0, vy: 0, fx: null, fy: null,
+      r: 10, depth: 0, rank: 0,
+      fade: 0, fadeT: 1, dim: 1, dimT: 1,
+      fillA: 0.1, fillAT: 0.1, glow: 0, glowT: 0,
+      labelHTML: null,
+    };
+  }
+
+  function updateItemNode(n, raw) {
+    if (n.name !== raw.name) n.labelHTML = null;
+    n.name = raw.name || raw.id;
+    n.type = raw.type; n.family = raw.family;
+    n.typeLabel = raw.typeLabel || raw.type;
+    n.status = raw.status; n.statusLabel = raw.statusLabel || raw.status;
+    n.section = raw.section || "";
+    n.statement = raw.statement || "";
+    n.tags = Array.isArray(raw.tags) ? raw.tags : [];
+    n.rank = typeof raw.statusRank === "number" ? raw.statusRank : (STATUS_RANKS[raw.status] ?? 0);
+    n.fillAT = fillAlphaFor(n.rank);
+    n.glowT = glowFor(n.rank);
+  }
+
+  function rebuildTagNodes() {
+    const tagMembers = new Map();
+    for (const n of nodes.values()) {
+      if (n.isTag) continue;
+      for (const t of n.tags || []) {
+        if (!tagMembers.has(t)) tagMembers.set(t, []);
+        tagMembers.get(t).push(n.id);
+      }
+    }
+    for (const n of [...nodes.values()]) {
+      if (n.isTag && !tagMembers.has(n.tagName)) {
+        nodes.delete(n.id);
+        removeLabel(n.id);
+        if (tagEmphasis === n.id) { tagEmphasis = null; emphMembers = null; }
+      }
+    }
+    for (const [name, members] of tagMembers) {
+      const id = TAG_PREFIX + name;
+      let n = nodes.get(id);
+      if (!n) {
+        n = makeItemNode(id);
+        n.isTag = true;
+        n.tagName = name;
+        n.name = "#" + name;
+        n.r = TAG_RADIUS;
+        n.fillA = n.fillAT = 0;
+        nodes.set(id, n);
+      }
+      n.members = members;
+    }
+  }
+
+  function computeRadii() {
+    const dependents = new Map();
+    const degree = new Map();
+    const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+    for (const e of itemEdges) {
+      bump(dependents, e.source);
+      bump(degree, e.source);
+      bump(degree, e.target);
+    }
+    for (const n of nodes.values()) {
+      if (n.isTag) { n.r = TAG_RADIUS * S.nodeScale; continue; }
+      n.deg = degree.get(n.id) || 0;
+      const base = TYPE_RADIUS[n.type] || 10;
+      const boost = Math.min(1.6, 1 + 0.12 * Math.sqrt(dependents.get(n.id) || 0));
+      n.r = base * boost * S.nodeScale;
+    }
+  }
+
+  /* Longest path from roots via Kahn's algorithm; nodes stuck on a cycle get a
+     best-effort depth from their resolved dependencies. Never loops forever. */
+  function computeDepths() {
+    const items = [...nodes.values()].filter((n) => !n.isTag);
+    const indeg = new Map(items.map((n) => [n.id, 0]));
+    const out = new Map();
+    for (const e of itemEdges) {
+      if (!indeg.has(e.source) || !indeg.has(e.target)) continue;
+      indeg.set(e.target, indeg.get(e.target) + 1);
+      if (!out.has(e.source)) out.set(e.source, []);
+      out.get(e.source).push(e.target);
+    }
+    const depth = new Map();
+    const queue = [];
+    for (const [id, d] of indeg) if (d === 0) { queue.push(id); depth.set(id, 0); }
+    let qi = 0;
+    while (qi < queue.length) {
+      const id = queue[qi++];
+      for (const next of out.get(id) || []) {
+        depth.set(next, Math.max(depth.get(next) || 0, depth.get(id) + 1));
+        indeg.set(next, indeg.get(next) - 1);
+        if (indeg.get(next) === 0) queue.push(next);
+      }
+    }
+    for (const n of items) {
+      if (depth.has(n.id)) { n.depth = depth.get(n.id); continue; }
+      let d = 1;
+      for (const e of itemEdges) {
+        if (e.target === n.id && depth.has(e.source)) d = Math.max(d, depth.get(e.source) + 1);
+      }
+      n.depth = d;
+    }
+  }
+
+  function structuralSig() {
+    const ids = [...nodes.keys()].sort().join(";");
+    const es = itemEdges.map((e) => e.source + ">" + e.target).sort().join(";");
+    return ids + "|" + es;
+  }
+
+  /* ── Seeding ─────────────────────────────────────────────────────────────── */
+
+  /* Deterministic first layout: each node at its topological depth, spread
+     horizontally with section-mates adjacent — converges without the big-bang flail.
+     Rows wrap once a level gets crowded, and items with no dependencies at all pool
+     into a compact block beneath the graph instead of stretching into one long line. */
+  function seedAll() {
+    const bySection = (a, b) => {
+      const ka = (a.section || "~") + "/" + a.id;
+      const kb = (b.section || "~") + "/" + b.id;
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    };
+    const place = (list, cols, dx, dy, originY) => {
+      list.forEach((n, i) => {
+        const row = Math.floor(i / cols);
+        const inRow = Math.min(cols, list.length - row * cols);
+        n.x = ((i % cols) - (inRow - 1) / 2) * dx + (hash01(n.id) - 0.5) * 26;
+        n.y = originY + row * dy + (hash01(n.id + "y") - 0.5) * 22;
+        n.vx = n.vy = 0; n.fx = n.fy = null;
+      });
+    };
+
+    const levels = new Map();
+    const loose = [];
+    for (const n of nodes.values()) {
+      if (n.isTag) continue;
+      if (!n.deg) { loose.push(n); continue; }
+      if (!levels.has(n.depth)) levels.set(n.depth, []);
+      levels.get(n.depth).push(n);
+    }
+    for (const [d, list] of levels) {
+      list.sort(bySection);
+      const cols = Math.max(14, Math.ceil(Math.sqrt(list.length * 3)));
+      place(list, cols, 76, 52, -d * levelGap());
+    }
+    /* Unattached items: a wide, shallow band below the roots. Column count is picked
+       for roughly a 4:1 block — far short of the single row that used to run off
+       screen, but flat enough that it never reads as a second blob. */
+    loose.sort(bySection);
+    place(loose, Math.max(8, Math.round(Math.sqrt(loose.length * 3.6))), 46, 42, LOOSE_Y);
+
+    for (const n of nodes.values()) {
+      if (!n.isTag) continue;
+      n.x = NaN;
+      seedNode(n);
+      n.vx = n.vy = 0; n.fx = n.fy = null;
+    }
+  }
+
+  function seedNode(n) {
+    const cached = posCache.get(n.id);
+    if (cached) { n.x = cached.x; n.y = cached.y; return; }
+    let sx = 0, sy = 0, c = 0;
+    if (n.isTag) {
+      for (const m of n.members || []) {
+        const mn = nodes.get(m);
+        if (mn && Number.isFinite(mn.x)) { sx += mn.x; sy += mn.y; c++; }
+      }
+    } else {
+      for (const e of itemEdges) {
+        const other = e.source === n.id ? e.target : e.target === n.id ? e.source : null;
+        if (!other) continue;
+        const on = nodes.get(other);
+        if (on && Number.isFinite(on.x)) { sx += on.x; sy += on.y; c++; }
+      }
+    }
+    if (c) {
+      n.x = sx / c + (hash01(n.id) - 0.5) * 80;
+      n.y = sy / c + (hash01(n.id + "y") - 0.5) * 80;
+    } else if (n.isTag) {
+      n.x = (hash01(n.id) - 0.5) * 300;
+      n.y = 60 + hash01(n.id + "y") * 90;
+    } else if (!n.deg) {
+      n.x = (hash01(n.id) - 0.5) * 340;
+      n.y = LOOSE_Y + (hash01(n.id + "y") - 0.5) * 120;
+    } else {
+      n.x = (hash01(n.id) - 0.5) * 500;
+      n.y = -n.depth * levelGap() + (hash01(n.id + "y") - 0.5) * 40;
+    }
+  }
+
+  /* ── Simulation ──────────────────────────────────────────────────────────── */
+
+  const linkCount = (id) => linkCountMap.get(id) || 1;
+
+  /* Force accessors read `S` live, but d3 caches what they return at initialize
+     time — so a settings change has to re-set them (each setter re-initializes
+     that force) rather than merely mutating `S`. */
+  const linkDistanceOf = (l) =>
+    (l.kind === "tag" ? 26 : 42) * S.linkDistance + l.source.r + l.target.r;
+  const chargeOf = (d) => (d.isTag ? -60 : -13 * d.r) * S.charge;
+  const collideOf = (d) => d.r + 4 * S.collide;
+  const homeYOf = (d) => (!d.isTag && !d.deg ? LOOSE_Y : -d.depth * levelGap());
+  /* Unattached items have no links to shape them, so their pool is shaped purely
+     by these two: collision fixes its area, and the ratio of the vertical to the
+     horizontal pull fixes its aspect (≈ sqrt(ky/kx)). Vertical dominant gives a
+     wide, shallow band — a horizontal-dominant pull rounds it into a blob, and
+     vertical alone flattens it to the one endless row this replaced. */
+  const gravityXOf = (d) => (!d.isTag && !d.deg ? 0.014 : 0.02) * S.gravity;
+  const gravityYOf = (d) => (d.isTag ? 0 : d.deg ? 0.06 : 0.12) * S.gravity;
+
+  function ensureSim() {
+    if (sim) return;
+    linkForce = d3.forceLink()
+      .id((d) => d.id)
+      .distance(linkDistanceOf)
+      .strength((l) => {
+        if (l.kind === "tag") return 0.08;
+        return 0.8 / Math.max(1, Math.min(linkCount(sid(l.source)), linkCount(sid(l.target))));
+      });
+    sim = d3.forceSimulation()
+      .alphaDecay(0.055)
+      .velocityDecay(0.5)
+      .force("link", linkForce)
+      .force("charge", d3.forceManyBody().strength(chargeOf).distanceMax(420))
+      .force("collide", d3.forceCollide().radius(collideOf).iterations(2))
+      .force("x", d3.forceX(0).strength(gravityXOf))
+      .force("y", d3.forceY(homeYOf).strength(gravityYOf))
+      .stop();   // stepped manually from the rAF loop; d3's internal timer never runs
+  }
+
+  /* Re-reads every force accessor after a settings change. */
+  function applyForces(energy) {
+    if (!sim) return;
+    linkForce.distance(linkDistanceOf);
+    sim.force("charge").strength(chargeOf);
+    sim.force("collide").radius(collideOf);
+    sim.force("x").strength(gravityXOf);
+    sim.force("y").y(homeYOf).strength(gravityYOf);
+    if (energy > 0) sim.alpha(Math.max(sim.alpha(), energy));
+    wake();
+  }
+
+  function itemVisible(n) {
+    if (isolation && !isolation.has(n.id)) return false;
+    if (!filter) return true;
+    if (filter.types.length && !filter.types.includes(n.type)) return false;
+    if (filter.statuses.length && !filter.statuses.includes(n.status)) return false;
+    const ns = n.section || "";
+    if (filter.section && !(ns === filter.section || ns.startsWith(filter.section + "/"))) return false;
+    return true;
+  }
+
+  /* Rebuilds the simulated node/link sets after any membership change (setGraph,
+     filters, tags toggle). Filtered-out nodes leave the simulation so the layout
+     reflows; returning nodes come back near where they were. */
+  function refreshMembership(energy) {
+    const prevIds = new Set(simNodes.map((n) => n.id));
+    const prevLinks = simLinks;
+    const prevLinkDim = new Map(prevLinks.map((l) => [l.key, l.dim]));
+
+    const visible = [];
+    const visibleIds = new Set();
+    for (const n of nodes.values()) {
+      if (!n.isTag && itemVisible(n)) { visible.push(n); visibleIds.add(n.id); }
+    }
+    if (tagsVisible) {
+      for (const n of nodes.values()) {
+        if (!n.isTag) continue;
+        n.visibleMembers = (n.members || []).filter((m) => visibleIds.has(m));
+        if (n.visibleMembers.length) { visible.push(n); visibleIds.add(n.id); }
+      }
+    }
+
+    simLinks = [];
+    for (const e of itemEdges) {
+      if (visibleIds.has(e.source) && visibleIds.has(e.target)) {
+        const key = e.source + " " + e.target;
+        simLinks.push({ source: e.source, target: e.target, kind: "dep", key,
+                        dim: prevLinkDim.get(key) ?? 1, dimT: 1 });
+      }
+    }
+    if (tagsVisible) {
+      for (const n of visible) {
+        if (!n.isTag) continue;
+        for (const m of n.visibleMembers) {
+          const key = n.id + " " + m;
+          simLinks.push({ source: n.id, target: m, kind: "tag", key,
+                          dim: prevLinkDim.get(key) ?? 1, dimT: 1 });
+        }
+      }
+    }
+
+    for (const id of prevIds) {
+      if (visibleIds.has(id)) continue;
+      const n = nodes.get(id);
+      if (n) {
+        n.fadeT = 0;
+        if (!exiting.includes(n)) exiting.push(n);
+        hideLabel(id);
+      }
+    }
+
+    // Links that lost an endpoint fade out alongside it (after the fadeT above).
+    const liveKeys = new Set(simLinks.map((l) => l.key));
+    exitingLinks = exitingLinks.concat(prevLinks.filter((l) => {
+      if (liveKeys.has(l.key)) return false;
+      const s = typeof l.source === "object" ? l.source : nodes.get(l.source);
+      const t = typeof l.target === "object" ? l.target : nodes.get(l.target);
+      return s && t && (s.fadeT === 0 || t.fadeT === 0);
+    }));
+
+    for (const n of visible) {
+      const i = exiting.indexOf(n);
+      if (i >= 0) exiting.splice(i, 1);
+      if (!prevIds.has(n.id)) {
+        if (!Number.isFinite(n.x)) seedNode(n);
+        n.fadeT = 1;
+      }
+    }
+
+    if (hoverId && !visibleIds.has(hoverId)) { hoverId = null; hideTooltip(); }
+    if (tagEmphasis && !visibleIds.has(tagEmphasis)) { tagEmphasis = null; emphMembers = null; }
+
+    simNodes = visible;
+    linkCountMap = new Map();
+    for (const l of simLinks) {
+      linkCountMap.set(sid(l.source), (linkCountMap.get(sid(l.source)) || 0) + 1);
+      linkCountMap.set(sid(l.target), (linkCountMap.get(sid(l.target)) || 0) + 1);
+    }
+    ensureSim();
+    sim.nodes(simNodes);
+    linkForce.links(simLinks);
+
+    adjacency = new Map();
+    for (const l of simLinks) {
+      const s = sid(l.source), t = sid(l.target);
+      if (!adjacency.has(s)) adjacency.set(s, new Set());
+      if (!adjacency.has(t)) adjacency.set(t, new Set());
+      adjacency.get(s).add(t);
+      adjacency.get(t).add(s);
+    }
+
+    if (energy > 0) sim.alpha(Math.max(sim.alpha(), energy));
+    recomputeTrace();
+    recomputeDims();
+    wake();
+  }
+
+  /* ── Isolation (right-click) ──────────────────────────────────────────────
+     Keeps the node's whole derivation lineage — everything it rests on, and
+     everything resting on it — and hard-hides the rest, so the layout reflows
+     around what's left. Unrelated siblings that merely share a dependency go
+     too; that is the point of isolating. */
+
+  function lineageOf(id) {
+    const forward = new Map(), backward = new Map();
+    for (const e of itemEdges) {
+      if (!forward.has(e.source)) forward.set(e.source, []);
+      forward.get(e.source).push(e.target);
+      if (!backward.has(e.target)) backward.set(e.target, []);
+      backward.get(e.target).push(e.source);
+    }
+    const keep = new Set([id]);
+    for (const map of [forward, backward]) {
+      const queue = [id];
+      let qi = 0;
+      while (qi < queue.length) {
+        for (const next of map.get(queue[qi++]) || []) {
+          if (!keep.has(next)) { keep.add(next); queue.push(next); }
+        }
+      }
+    }
+    return keep;
+  }
+
+  function isolateNode(id) {
+    const n = nodes.get(id);
+    if (!n || n.isTag) return;
+    isolation = lineageOf(id);
+    selectedId = id;
+    refreshMembership(0.6);
+  }
+
+  function clearIsolation() {
+    if (!isolation) return;
+    isolation = null;
+    refreshMembership(0.5);
+  }
+
+  /* ── Trace (highlightRelated) ────────────────────────────────────────────── */
+
+  function recomputeTrace() {
+    trace = null;
+    if (!traceReq) return;
+    const start = nodes.get(traceReq.id);
+    if (!start || start.isTag || !simNodes.includes(start)) return;
+    const bySource = new Map(), byTarget = new Map();
+    for (const l of simLinks) {
+      if (l.kind !== "dep") continue;
+      const s = sid(l.source), t = sid(l.target);
+      if (!bySource.has(s)) bySource.set(s, []);
+      bySource.get(s).push(l);
+      if (!byTarget.has(t)) byTarget.set(t, []);
+      byTarget.get(t).push(l);
+    }
+    const nset = new Set([start.id]);
+    const eset = new Set();
+    const queue = [start.id];
+    let qi = 0;
+    while (qi < queue.length) {
+      const cur = queue[qi++];
+      const links = traceReq.mode === "ancestors"
+        ? (byTarget.get(cur) || [])   // walk source-ward: transitive dependencies
+        : (bySource.get(cur) || []);  // walk target-ward: everything built on it
+      for (const l of links) {
+        eset.add(l.key);
+        const nxt = traceReq.mode === "ancestors" ? sid(l.source) : sid(l.target);
+        if (!nset.has(nxt)) { nset.add(nxt); queue.push(nxt); }
+      }
+    }
+    trace = { nodes: nset, edges: eset };
+    selectedId = traceReq.id;   // visual selection only; no bridge message
+  }
+
+  /* ── Dimming (hover / trace / tag emphasis / selection) ──────────────────────
+     Strongest cue wins: trace ▸ tag emphasis ▸ selection ▸ hover. Selecting a node
+     emphasizes its neighborhood exactly as hard as clicking a tag does; hover stays
+     deliberately softer, since it fires just by moving the mouse. */
+
+  function recomputeDims() {
+    emphMembers = null;
+    if (tagEmphasis) {
+      const tagN = nodes.get(tagEmphasis);
+      emphMembers = new Set(tagN?.visibleMembers || []);
+    }
+    const selected = !tagEmphasis && selectedId && nodes.get(selectedId) ? selectedId : null;
+    const selNeighbors = selected ? adjacency.get(selected) : null;
+    const hoverNeighbors = hoverId ? adjacency.get(hoverId) : null;
+    for (const n of simNodes) {
+      let d = 1;
+      if (trace) {
+        d = trace.nodes.has(n.id) ? 1 : 0.1;
+      } else if (tagEmphasis) {
+        d = (n.id === tagEmphasis || emphMembers.has(n.id)) ? 1 : 0.22;
+      } else if (selected) {
+        d = (n.id === selected || (selNeighbors && selNeighbors.has(n.id))) ? 1 : 0.22;
+      } else if (hoverId) {
+        d = (n.id === hoverId || (hoverNeighbors && hoverNeighbors.has(n.id))) ? 1 : 0.62;
+      }
+      n.dimT = d;
+    }
+    for (const l of simLinks) {
+      const s = sid(l.source), t = sid(l.target);
+      let d = 1;
+      if (trace) {
+        d = trace.edges.has(l.key) ? 1 : 0.1;
+      } else if (tagEmphasis) {
+        if (l.kind === "tag") d = s === tagEmphasis ? 1 : 0.15;
+        else d = (emphMembers.has(s) && emphMembers.has(t)) ? 1 : 0.22;
+      } else if (selected) {
+        d = (s === selected || t === selected) ? 1 : 0.22;
+      } else if (hoverId) {
+        d = (s === hoverId || t === hoverId) ? 1 : 0.62;
+      }
+      l.dimT = d;
+    }
+    wake();
+  }
+
+  /* ── Camera ──────────────────────────────────────────────────────────────── */
+
+  function screenToWorld(x, y) {
+    return { x: (x - cam.x) / cam.k, y: (y - cam.y) / cam.k };
+  }
+
+  function animateCamera(to, dur) {
+    camAnim = { from: { x: cam.x, y: cam.y, k: cam.k }, to, start: performance.now(), dur };
+    hideTooltip();
+    wake();
+  }
+
+  function stepCamera(now) {
+    if (!camAnim) return false;
+    const t = (now - camAnim.start) / camAnim.dur;
+    if (t >= 1) {
+      cam.x = camAnim.to.x; cam.y = camAnim.to.y; cam.k = camAnim.to.k;
+      camAnim = null;
+      return true;
+    }
+    const e = easeCubicInOut(Math.max(0, t));
+    cam.x = lerp(camAnim.from.x, camAnim.to.x, e);
+    cam.y = lerp(camAnim.from.y, camAnim.to.y, e);
+    cam.k = lerp(camAnim.from.k, camAnim.to.k, e);
+    return true;
+  }
+
+  function fitToView(animated) {
+    if (!simNodes.length) return;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of simNodes) {
+      x0 = Math.min(x0, n.x - n.r); x1 = Math.max(x1, n.x + n.r);
+      y0 = Math.min(y0, n.y - n.r); y1 = Math.max(y1, n.y + n.r);
+    }
+    const pad = 70;
+    const k = Math.max(0.15, Math.min(W / (x1 - x0 + pad * 2), H / (y1 - y0 + pad * 2), 1.25));
+    const to = { k, x: W / 2 - (x0 + x1) / 2 * k, y: H / 2 - (y0 + y1) / 2 * k };
+    if (animated) animateCamera(to, 350);
+    else { cam.x = to.x; cam.y = to.y; cam.k = to.k; wake(); }
+  }
+
+  function zoomAt(cx, cy, k) {
+    k = Math.max(0.15, Math.min(4, k));
+    const wx = (cx - cam.x) / cam.k, wy = (cy - cam.y) / cam.k;
+    cam.k = k;
+    cam.x = cx - wx * k;
+    cam.y = cy - wy * k;
+    camAnim = null;
+    hideTooltip();
+    wake();
+  }
+
+  /* ── Labels (KaTeX overlay) ──────────────────────────────────────────────── */
+
+  const labelDivs = new Map();
+  let labelFontSize = 0;
+
+  function removeLabel(id) {
+    const div = labelDivs.get(id);
+    if (div) { div.remove(); labelDivs.delete(id); }
+  }
+  function hideLabel(id) {
+    const div = labelDivs.get(id);
+    if (div && !div._hidden) { div.style.display = "none"; div._hidden = true; }
+  }
+
+  function labelFor(n) {
+    let div = labelDivs.get(n.id);
+    if (!div) {
+      div = document.createElement("div");
+      div.className = "node-label" + (n.isTag ? " tag-label" : "");
+      div._o = -1;
+      div._hidden = false;
+      labelsEl.appendChild(div);
+      labelDivs.set(n.id, div);
+      n.labelHTML = null;
+    }
+    if (n.labelHTML === null) {
+      if (n.isTag) {
+        n.labelHTML = escapeHTML(n.name);
+      } else {
+        const lines = String(n.name || "").split("\n");
+        n.labelHTML = renderInlineMath(lines[0]) +
+          (lines.length > 1
+            ? '<span class="sub">' + renderInlineMath(lines.slice(1).join(" ")) + "</span>"
+            : "");
+      }
+      setRenderedContent(div, n.labelHTML);
+    }
+    return div;
+  }
+
+  function labelOpacity(n) {
+    const g = globalFade * n.fade;
+    const forced = n.id === hoverId || n.id === selectedId ||
+      (trace && trace.nodes.has(n.id)) ||
+      (tagEmphasis && (n.id === tagEmphasis || (emphMembers && emphMembers.has(n.id))));
+    if (forced) return g;
+    const x = cam.k * n.r;
+    const lo = (n.isTag ? 3.5 : 7) * S.labelZoom;
+    const span = (n.isTag ? 4 : 6) * S.labelZoom;
+    let t = Math.max(0, Math.min(1, (x - lo) / span));
+    t = t * t * (3 - 2 * t);
+    return t * n.dim * g;
+  }
+
+  function syncLabels() {
+    const fs = 12 * Math.min(1.45, Math.max(0.85, Math.sqrt(cam.k)));
+    if (Math.abs(fs - labelFontSize) > 0.1) {
+      labelFontSize = fs;
+      labelsEl.style.fontSize = fs.toFixed(1) + "px";
+    }
+    const seen = new Set();
+    for (const n of simNodes) {
+      const o = labelOpacity(n);
+      if (o < 0.02) continue;
+      const sx = n.x * cam.k + cam.x;
+      const sy = n.y * cam.k + cam.y + n.r * cam.k + 4;
+      if (sx < -180 || sx > W + 180 || sy < -70 || sy > H + 30) continue;
+      seen.add(n.id);
+      const div = labelFor(n);
+      div.style.transform =
+        "translate(" + sx.toFixed(1) + "px," + sy.toFixed(1) + "px) translate(-50%,0)";
+      if (Math.abs(o - div._o) > 0.02) { div.style.opacity = o.toFixed(2); div._o = o; }
+      if (div._hidden) { div.style.display = ""; div._hidden = false; }
+    }
+    for (const [id, div] of labelDivs) {
+      if (!seen.has(id)) hideLabel(id);
+    }
+  }
+
+  /* Project macros re-render every cached label (render.js owns the base impl). */
+  const baseSetMathMacros = window.setMathMacros;
+  window.setMathMacros = function (macros) {
+    baseSetMathMacros(macros);
+    for (const n of nodes.values()) n.labelHTML = null;
+    wake();
+  };
+
+  /* ── Tooltip ─────────────────────────────────────────────────────────────── */
+
+  let tooltipTimer = null;
+  const lastCursor = { x: 0, y: 0 };
+
+  function showTooltip(n) {
+    // Suppress only while a gesture is actually in progress. Testing panMoved here
+    // meant "a pan happened at some point", which never cleared — one pan and the
+    // tooltip never came back.
+    if (dragging || panning) return;
+    let html;
+    if (n.isTag) {
+      const count = (n.visibleMembers || []).length;
+      html = '<div class="tt-title">' + escapeHTML(n.name) + " · " + count +
+             (count === 1 ? " item" : " items") + "</div>";
+    } else {
+      const statement = n.statement
+        ? renderMarkdownWithMath(n.statement)
+        : "<em>No statement recorded.</em>";
+      html = '<div class="tt-title">' + renderInlineMath(n.name) + "</div>" +
+        '<div class="tt-meta">' + escapeHTML(n.typeLabel) + " · " +
+        escapeHTML(n.statusLabel) + " · " + escapeHTML(n.id) + "</div>" +
+        statement;
+    }
+    setRenderedContent(tooltip, html);
+    tooltip.style.display = "block";
+    const rect = tooltip.getBoundingClientRect();
+    const left = Math.min(lastCursor.x + 14, window.innerWidth - rect.width - 8);
+    const top = Math.min(lastCursor.y + 14, window.innerHeight - rect.height - 8);
+    tooltip.style.left = Math.max(4, left) + "px";
+    tooltip.style.top = Math.max(4, top) + "px";
+  }
+
+  function hideTooltip() {
+    clearTimeout(tooltipTimer);
+    tooltipTimer = null;
+    tooltip.style.display = "none";
+  }
+
+  /* ── Interaction ─────────────────────────────────────────────────────────── */
+
+  let dragNode = null, dragging = false;
+  let panning = false, panMoved = false, panStart = null;
+  const downPos = { x: 0, y: 0 };
+
+  function nodeAt(wx, wy) {
+    let best = null, bestD = Infinity;
+    for (const n of simNodes) {
+      if (trace && !trace.nodes.has(n.id)) continue;   // dimmed: pointer events off
+      const d = Math.hypot(wx - n.x, wy - n.y) - n.r;
+      if (d <= 4 && d < bestD) { best = n; bestD = d; }
+    }
+    return best;
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    // Capture keeps a drag alive past the canvas edge, but it is not essential —
+    // never let a rejected capture abort the rest of the gesture.
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    hideTooltip();
+    downPos.x = e.clientX; downPos.y = e.clientY;
+    const w = screenToWorld(e.clientX, e.clientY);
+    const n = nodeAt(w.x, w.y);
+    if (n) {
+      dragNode = n;
+      canvas.style.cursor = "grabbing";
+    } else {
+      panning = true; panMoved = false;
+      panStart = { x: cam.x, y: cam.y, px: e.clientX, py: e.clientY };
+    }
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    lastCursor.x = e.clientX; lastCursor.y = e.clientY;
+    if (dragNode) {
+      if (!dragging && Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 3) {
+        dragging = true;
+        sim.alphaTarget(0.3);
+        sim.alpha(Math.max(sim.alpha(), 0.3));
+      }
+      if (dragging) {
+        const w = screenToWorld(e.clientX, e.clientY);
+        dragNode.fx = w.x;
+        dragNode.fy = w.y;
+        wake();
+      }
+      return;
+    }
+    if (panning) {
+      const dx = e.clientX - panStart.px, dy = e.clientY - panStart.py;
+      if (!panMoved && Math.hypot(dx, dy) > 3) {
+        panMoved = true;
+        canvas.style.cursor = "grabbing";
+        hideTooltip();
+      }
+      if (panMoved) {
+        cam.x = panStart.x + dx;
+        cam.y = panStart.y + dy;
+        camAnim = null;
+        wake();
+      }
+      return;
+    }
+    updateHover(e.clientX, e.clientY);
+  });
+
+  function updateHover(cx, cy) {
+    const w = screenToWorld(cx, cy);
+    const n = nodeAt(w.x, w.y);
+    const id = n ? n.id : null;
+    canvas.style.cursor = n ? "grab" : "default";
+    if (id === hoverId) {
+      // Still the same node, but a pan or zoom may have dismissed its tooltip
+      // in the meantime — re-arm rather than waiting for a different node.
+      if (n && !tooltipTimer && tooltip.style.display === "none") {
+        tooltipTimer = setTimeout(() => showTooltip(n), 150);
+      }
+      return;
+    }
+    hoverId = id;
+    recomputeDims();
+    hideTooltip();
+    if (n) tooltipTimer = setTimeout(() => showTooltip(n), 150);
+  }
+
+  function endPointer(e) {
+    if (dragging) {
+      dragNode.fx = dragNode.fy = null;
+      sim.alphaTarget(0);
+      dragging = false;
+      dragNode = null;
+      canvas.style.cursor = "grab";
+      wake();
+      return;
+    }
+    if (dragNode) {   // click on a node (no drag)
+      const n = dragNode;
+      dragNode = null;
+      canvas.style.cursor = "grab";
+      if (n.isTag) {
+        tagEmphasis = tagEmphasis === n.id ? null : n.id;
+        recomputeDims();
+      } else {
+        selectedId = n.id;
+        recomputeDims();
+        post({ type: "nodeSelected", id: n.id });
+      }
+      return;
+    }
+    if (panning) {
+      panning = false;
+      canvas.style.cursor = "default";
+      if (!panMoved) deselectAll();
+      panMoved = false;
+    }
+  }
+
+  /* Background click deselects everything, including an active trace. The app owns
+     the trace (it re-pushes highlightRelated whenever its selection changes), so
+     tell it the selection is gone — otherwise the pulses outlive the selection. */
+  function deselectAll() {
+    const had = selectedId || tagEmphasis || trace;
+    selectedId = null;
+    tagEmphasis = null;
+    traceReq = null;
+    trace = null;
+    recomputeDims();
+    if (had) post({ type: "selectionCleared" });
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("pointerleave", () => {
+    if (!dragNode && !panning && hoverId) {
+      hoverId = null;
+      recomputeDims();
+      hideTooltip();
+      canvas.style.cursor = "default";
+    }
+  });
+
+  /* ── Context menu ────────────────────────────────────────────────────────── */
+
+  function hideContextMenu() {
+    if (ctxmenu.style.display !== "none") ctxmenu.style.display = "none";
+  }
+
+  function showContextMenu(x, y, entries, heading) {
+    ctxmenu.replaceChildren();
+    if (heading) {
+      const h = document.createElement("div");
+      h.className = "ctx-head";
+      h.textContent = heading;
+      ctxmenu.appendChild(h);
+      ctxmenu.appendChild(Object.assign(document.createElement("div"), { className: "ctx-sep" }));
+    }
+    for (const [label, action] of entries) {
+      const b = document.createElement("button");
+      b.className = "ctx-item";
+      b.textContent = label;
+      b.addEventListener("click", () => { hideContextMenu(); action(); });
+      ctxmenu.appendChild(b);
+    }
+    ctxmenu.style.display = "block";
+    const rect = ctxmenu.getBoundingClientRect();
+    ctxmenu.style.left = Math.max(4, Math.min(x, window.innerWidth - rect.width - 6)) + "px";
+    ctxmenu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 6)) + "px";
+  }
+
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    hideTooltip();
+    const w = screenToWorld(e.clientX, e.clientY);
+    const n = nodeAt(w.x, w.y);
+    const entries = [];
+    let heading = null;
+    if (n && !n.isTag) {
+      heading = n.name.split("\n")[0];
+      entries.push(["Isolate", () => isolateNode(n.id)]);
+      entries.push(["Select", () => {
+        selectedId = n.id;
+        recomputeDims();
+        post({ type: "nodeSelected", id: n.id });
+      }]);
+      entries.push(["Open in library", () => post({ type: "nodeOpened", id: n.id })]);
+    } else if (n && n.isTag) {
+      heading = n.name + " · " + (n.visibleMembers || []).length + " items";
+      entries.push([tagEmphasis === n.id ? "Clear emphasis" : "Emphasize members", () => {
+        tagEmphasis = tagEmphasis === n.id ? null : n.id;
+        recomputeDims();
+      }]);
+    }
+    if (isolation) entries.push(["Show all items", clearIsolation]);
+    if (!n) entries.push(["Fit to view", () => fitToView(true)]);
+    if (!entries.length) return;
+    showContextMenu(e.clientX, e.clientY, entries, heading);
+  });
+
+  window.addEventListener("pointerdown", (e) => {
+    if (!ctxmenu.contains(e.target)) hideContextMenu();
+  }, true);
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") hideContextMenu(); });
+  window.addEventListener("blur", hideContextMenu);
+
+  canvas.addEventListener("dblclick", (e) => {
+    const w = screenToWorld(e.clientX, e.clientY);
+    const n = nodeAt(w.x, w.y);
+    if (n) {
+      if (!n.isTag) post({ type: "nodeOpened", id: n.id });
+    } else {
+      fitToView(true);
+    }
+  });
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    hideContextMenu();
+    const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0022));
+    zoomAt(e.clientX, e.clientY, cam.k * factor);
+  }, { passive: false });
+
+  // WebKit trackpad pinch.
+  let gestureStartK = 1;
+  canvas.addEventListener("gesturestart", (e) => { e.preventDefault(); gestureStartK = cam.k; });
+  canvas.addEventListener("gesturechange", (e) => {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, gestureStartK * e.scale);
+  });
+  canvas.addEventListener("gestureend", (e) => e.preventDefault());
+
+  /* ── Animation loop — runs only while something moves; idle otherwise ────── */
+
+  let rafId = null, lastT = 0;
+
+  function wake() {
+    if (rafId == null) {
+      lastT = performance.now();
+      rafId = requestAnimationFrame(frame);
+    }
+  }
+
+  function frame(now) {
+    rafId = null;
+    const dt = Math.min(0.05, Math.max(0.001, (now - lastT) / 1000));
+    lastT = now;
+    let active = false;
+
+    if (sim && (sim.alpha() >= sim.alphaMin() || sim.alphaTarget() > 0)) {
+      sim.tick();
+      active = true;
+    }
+    if (stepCamera(now)) active = true;
+    if (stepTweens(dt)) active = true;
+    if (trace) active = true;   // pulses animate continuously while tracing
+
+    draw(now);
+    if (active) rafId = requestAnimationFrame(frame);
+  }
+
+  function approach(cur, target, rate) {
+    const next = cur + (target - cur) * rate;
+    return Math.abs(target - next) < 0.008 ? target : next;
+  }
+
+  function stepTweens(dt) {
+    let busy = false;
+    const dimRate = Math.min(1, dt * 11);        // ~90ms hover/trace transitions
+    const solidityRate = Math.min(1, dt * 7.5);  // ~300ms status solidity/glow
+    const fadeStep = dt * 5;                     // ~200ms enter/exit fades
+
+    for (const n of simNodes) {
+      const d0 = n.dim, f0 = n.fillA, g0 = n.glow, fa0 = n.fade;
+      n.dim = approach(n.dim, n.dimT, dimRate);
+      n.fillA = approach(n.fillA, n.fillAT, solidityRate);
+      n.glow = approach(n.glow, n.glowT, solidityRate);
+      if (n.fade < n.fadeT) n.fade = Math.min(n.fadeT, n.fade + fadeStep);
+      if (n.dim !== d0 || n.fillA !== f0 || n.glow !== g0 || n.fade !== fa0) busy = true;
+    }
+    for (const l of simLinks) {
+      const d0 = l.dim;
+      l.dim = approach(l.dim, l.dimT, dimRate);
+      if (l.dim !== d0) busy = true;
+    }
+    if (exiting.length) {
+      busy = true;
+      for (const n of exiting) n.fade = Math.max(0, n.fade - fadeStep);
+      exiting = exiting.filter((n) => n.fade > 0.01);
+    }
+    if (exitingLinks.length) {
+      exitingLinks = exitingLinks.filter((l) => {
+        const s = typeof l.source === "object" ? l.source : nodes.get(l.source);
+        const t = typeof l.target === "object" ? l.target : nodes.get(l.target);
+        return s && t && Math.min(s.fade, t.fade) > 0.01;
+      });
+      if (exitingLinks.length) busy = true;
+    }
+    if (globalFade < globalFadeT) {
+      globalFade = Math.min(globalFadeT, globalFade + dt * 1.8);
+      busy = true;
+    }
+    return busy;
+  }
+
+  /* ── Rendering ───────────────────────────────────────────────────────────── */
+
+  function glowSprite(rgb) {
+    const key = rgb.join(",");
+    let c = glowSprites.get(key);
+    if (!c) {
+      c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const g = c.getContext("2d");
+      const grad = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+      grad.addColorStop(0, rgba(rgb, 0.55));
+      grad.addColorStop(0.45, rgba(rgb, 0.22));
+      grad.addColorStop(1, rgba(rgb, 0));
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      glowSprites.set(key, c);
+    }
+    return c;
+  }
+
+  function taperPath(s, t, wS, wT, shorten) {
+    const dx = t.x - s.x, dy = t.y - s.y;
+    const L = Math.hypot(dx, dy);
+    if (L < s.r + t.r + shorten + 2) return null;
+    const ux = dx / L, uy = dy / L;
+    const px = -uy, py = ux;
+    const ax = s.x + ux * s.r, ay = s.y + uy * s.r;
+    const bx = t.x - ux * (t.r + shorten), by = t.y - uy * (t.r + shorten);
+    ctx.moveTo(ax + px * wS / 2, ay + py * wS / 2);
+    ctx.lineTo(bx + px * wT / 2, by + py * wT / 2);
+    ctx.lineTo(bx - px * wT / 2, by - py * wT / 2);
+    ctx.lineTo(ax - px * wS / 2, ay - py * wS / 2);
+    ctx.closePath();
+    return { ux, uy, bx, by };
+  }
+
+  function linkNodes(l) {
+    const s = typeof l.source === "object" ? l.source : nodes.get(l.source);
+    const t = typeof l.target === "object" ? l.target : nodes.get(l.target);
+    return s && t ? [s, t] : null;
+  }
+
+  function drawEdges(now) {
+    const highlighted = [];
+    const buckets = new Map();
+
+    const restEdge = (l, s, t) => {
+      const a = 0.38 * l.dim * Math.min(s.fade, t.fade) * globalFade;
+      if (a <= 0.01) return;
+      const key = Math.round(a * 24);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push([s, t]);
+    };
+
+    for (const l of simLinks) {
+      const st = linkNodes(l);
+      if (!st) continue;
+      const [s, t] = st;
+      if (l.kind === "tag") continue;
+      const traced = trace && trace.edges.has(l.key);
+      const incident = !trace &&
+        (s.id === hoverId || t.id === hoverId || s.id === selectedId || t.id === selectedId);
+      if (traced || incident) highlighted.push([l, s, t, traced]);
+      else restEdge(l, s, t);
+    }
+    for (const l of exitingLinks) {
+      if (l.kind === "tag") continue;
+      const st = linkNodes(l);
+      if (st) restEdge(l, st[0], st[1]);
+    }
+
+    for (const [key, list] of buckets) {
+      ctx.beginPath();
+      for (const [s, t] of list) taperPath(s, t, 2.6 * S.linkWidth, 0.75 * S.linkWidth, 0);
+      ctx.fillStyle = rgba(css.muted, key / 24);
+      ctx.fill();
+    }
+
+    for (const [l, s, t, traced] of highlighted) {
+      const a = 0.92 * l.dim * Math.min(s.fade, t.fade) * globalFade;
+      if (a <= 0.01) continue;
+      const color = traced ? css.accent : css.muted;
+      ctx.beginPath();
+      const geom = taperPath(s, t, 3.1 * S.linkWidth, 1.2 * S.linkWidth, 6.5);
+      ctx.fillStyle = rgba(color, a);
+      ctx.fill();
+      if (geom) {   // arrowhead at the dependent end
+        const { ux, uy } = geom;
+        const tipX = t.x - ux * t.r, tipY = t.y - uy * t.r;
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(tipX - ux * 7 - uy * 3.6, tipY - uy * 7 + ux * 3.6);
+        ctx.lineTo(tipX - ux * 7 + uy * 3.6, tipY - uy * 7 - ux * 3.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Tag links: thin, dashed, undirected — unmistakably not dependencies.
+    ctx.save();
+    ctx.lineWidth = S.linkWidth;
+    ctx.setLineDash([5, 4]);
+    for (const l of simLinks.concat(exitingLinks)) {
+      if (l.kind !== "tag") continue;
+      const st = linkNodes(l);
+      if (!st) continue;
+      const [s, t] = st;
+      const a = 0.45 * l.dim * Math.min(s.fade, t.fade) * globalFade;
+      if (a <= 0.01) continue;
+      const dx = t.x - s.x, dy = t.y - s.y;
+      const L = Math.hypot(dx, dy);
+      if (L < s.r + t.r + 2) continue;
+      const ux = dx / L, uy = dy / L;
+      ctx.beginPath();
+      ctx.moveTo(s.x + ux * s.r, s.y + uy * s.r);
+      ctx.lineTo(t.x - ux * t.r, t.y - uy * t.r);
+      ctx.strokeStyle = rgba(css.tag, a);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Trace pulses: bright dots flowing dependency → dependent.
+    if (trace) {
+      for (const l of simLinks) {
+        if (!trace.edges.has(l.key)) continue;
+        const st = linkNodes(l);
+        if (!st) continue;
+        const [s, t] = st;
+        const dx = t.x - s.x, dy = t.y - s.y;
+        const L = Math.hypot(dx, dy);
+        if (L < s.r + t.r + 6) continue;
+        const ux = dx / L, uy = dy / L;
+        const ax = s.x + ux * s.r, ay = s.y + uy * s.r;
+        const bx = t.x - ux * t.r, by = t.y - uy * t.r;
+        const p = ((now / PULSE_PERIOD_MS) + hash01(l.key)) % 1;
+        const x = lerp(ax, bx, p), y = lerp(ay, by, p);
+        const rr = Math.max(3, 2 / cam.k);
+        ctx.beginPath();
+        ctx.arc(x, y, rr * 2, 0, TAU);
+        ctx.fillStyle = rgba(css.accent, 0.18 * globalFade);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, rr, 0, TAU);
+        ctx.fillStyle = rgba(css.accent, 0.9 * globalFade);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawNode(n) {
+    const gf = n.fade * globalFade;
+    if (gf <= 0.01) return;
+    const dim = n.dim;
+
+    if (n.isTag) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, TAU);
+      ctx.fillStyle = rgba(css.bg, 0.85 * gf);
+      ctx.fill();
+      ctx.save();
+      ctx.setLineDash([3, 2.6]);
+      ctx.lineWidth = 1.4 / cam.k;
+      ctx.strokeStyle = rgba(css.tag, (0.35 + 0.6 * dim) * gf);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    const rgb = typeRgb(n.family, n.type);
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, TAU);
+    ctx.fillStyle = rgba(rgb, n.fillA * dim * gf);
+    ctx.fill();
+    ctx.lineWidth = 1 / cam.k;
+    ctx.strokeStyle = rgba(css.fg, 0.30 * dim * gf);
+    ctx.stroke();
+
+    // Ghost ring: unproved statements keep a colored outline while the fill is airy.
+    if (n.fillA < 0.2) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, TAU);
+      ctx.lineWidth = 1.5 / cam.k;
+      ctx.strokeStyle = rgba(rgb, 0.85 * dim * gf);
+      ctx.stroke();
+    }
+
+    if (n.id === selectedId) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r + 3.5 / cam.k, 0, TAU);
+      ctx.lineWidth = 2.4 / cam.k;
+      ctx.strokeStyle = rgba(css.accent, 0.95 * gf);
+      ctx.stroke();
+    }
+  }
+
+  function draw(now) {
+    if (window.devicePixelRatio !== DPR) resizeCanvas();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(DPR * cam.k, 0, 0, DPR * cam.k, DPR * cam.x, DPR * cam.y);
+
+    drawEdges(now);
+
+    // Glows first, then fills, so halos sit underneath their neighbors' bodies.
+    for (const n of simNodes) {
+      if (n.isTag || n.glow <= 0.01) continue;
+      const a = n.glow * n.dim * n.fade * globalFade;
+      if (a <= 0.01) continue;
+      const R = n.r * (n.rank >= 6 ? 2.4 : 3.1);
+      ctx.globalAlpha = a;
+      ctx.drawImage(glowSprite(typeRgb(n.family, n.type)), n.x - R, n.y - R, R * 2, R * 2);
+      ctx.globalAlpha = 1;
+    }
+    for (const n of simNodes) drawNode(n);
+    for (const n of exiting) drawNode(n);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    syncLabels();
+  }
+
+  function resizeCanvas() {
+    DPR = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.max(1, Math.round(W * DPR));
+    canvas.height = Math.max(1, Math.round(H * DPR));
+  }
+
+  /* ── View settings panel ──────────────────────────────────────────────────
+     The panel writes into `S`, re-applies whatever that setting feeds, and posts
+     the whole set back to the app, which persists it and pushes it in again on
+     the next launch. Trace mode is the app's state (it needs the selected item),
+     so that control round-trips through the bridge instead. */
+
+  const modeSelect = document.getElementById("st-mode");
+  const sliders = new Map();
+  for (const key of Object.keys(SETTING_DEFAULTS)) {
+    const el = document.getElementById("st-" + key);
+    if (el) sliders.set(key, el);
+  }
+  const outputs = new Map(
+    [...document.querySelectorAll("#settings .st-value")].map((el) => [el.dataset.out, el])
+  );
+
+  const fmtSetting = (v) =>
+    ((Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, "") || "0") + "\u00d7";
+
+  function syncSettingControls() {
+    for (const [key, el] of sliders) {
+      if (Number(el.value) !== S[key]) el.value = S[key];
+      const out = outputs.get(key);
+      if (out) out.textContent = fmtSetting(S[key]);
+    }
+  }
+
+  function setModeControl(mode) {
+    if (modeSelect.value !== mode) modeSelect.value = mode;
+  }
+
+  /* Clamps to the slider's own range and drops anything unrecognised — the values
+     arrive from stored defaults, which outlive any one version of this panel. */
+  function mergeSettings(values) {
+    let changed = false, forces = false;
+    for (const [key, raw] of Object.entries(values || {})) {
+      const range = SETTING_RANGE[key];
+      const v = Number(raw);
+      if (!range || !Number.isFinite(v)) continue;
+      const clamped = Math.min(range[1], Math.max(range[0], v));
+      if (S[key] === clamped) continue;
+      S[key] = clamped;
+      changed = true;
+      if (FORCE_SETTINGS.has(key)) forces = true;
+    }
+    return { changed, forces };
+  }
+
+  function afterSettingsChange(keys, forces) {
+    if (keys.has("nodeScale")) { computeRadii(); forces = true; }
+    if (forces) applyForces(0.35);
+    syncSettingControls();
+    recomputeDims();
+    wake();
+  }
+
+  function pushSettingsToApp() {
+    post({ type: "graphSettings", values: Object.assign({}, S) });
+  }
+
+  for (const [key, el] of sliders) {
+    el.addEventListener("input", () => {
+      const { changed, forces } = mergeSettings({ [key]: el.value });
+      if (!changed) return;
+      afterSettingsChange(new Set([key]), forces);
+    });
+    // One save per gesture, not one per pixel of slider travel.
+    el.addEventListener("change", pushSettingsToApp);
+  }
+
+  modeSelect.addEventListener("change", () => {
+    post({ type: "traceMode", mode: modeSelect.value });
+  });
+
+  document.getElementById("st-reset").addEventListener("click", () => {
+    const { forces } = mergeSettings(SETTING_DEFAULTS);
+    afterSettingsChange(new Set(Object.keys(SETTING_DEFAULTS)), forces);
+    pushSettingsToApp();
+  });
+
+  // The whole header bar is the hit target; the chevron is just the affordance.
+  settingsEl.querySelector(".st-head").addEventListener("click", () => {
+    settingsEl.classList.toggle("collapsed");
+  });
+
+  syncSettingControls();
+
+  /* ── Bridge API (called from Swift; signatures are a fixed contract) ─────── */
+
+  /* Drops every trace of the drawn graph. Switching scope has to go through this:
+     two projects can use the same item ids, so the "did anything survive?" test
+     below cannot tell a re-import from a different store — and anything left
+     behind (a node, a half-faded edge, a cached position) would then be drawn on
+     top of the new graph, or worse, wired into it. */
+  function hardReset() {
+    for (const id of [...labelDivs.keys()]) removeLabel(id);
+    nodes.clear();
+    posCache.clear();
+    itemEdges = [];
+    simNodes = []; simLinks = [];
+    exiting = []; exitingLinks = [];
+    adjacency = new Map();
+    linkCountMap = new Map();
+    if (sim) { sim.nodes([]); linkForce.links([]); }
+    // `filter` is the app's, pushed again right after this; everything else here is
+    // state this page owns and nothing else will restore.
+    traceReq = null; trace = null;
+    selectedId = null; hoverId = null;
+    tagEmphasis = null; emphMembers = null;
+    isolation = null;
+    hasGraph = false;
+    hideTooltip();
+    hideContextMenu();
+    setModeControl("none");
+  }
+
+  window.setGraph = function (graph, scope) {
+    const data = typeof graph === "string" ? JSON.parse(graph) : graph;
+    const raws = data.nodes || [];
+    const rawEdges = data.edges || [];
+    emptyEl.style.display = raws.length ? "none" : "flex";
+    legendEl.style.display = raws.length ? "block" : "none";
+    settingsEl.style.display = raws.length ? "block" : "none";
+
+    const key = scope == null ? scopeKey : String(scope);
+    if (key !== scopeKey) { hardReset(); scopeKey = key; }
+
+    const incoming = new Set(raws.map((r) => r.id));
+    const freshLoad = ![...nodes.values()].some((n) => !n.isTag && incoming.has(n.id));
+    const oldSig = structuralSig();
+
+    for (const n of [...nodes.values()]) {
+      if (n.isTag || incoming.has(n.id)) continue;
+      posCache.set(n.id, { x: n.x, y: n.y });
+      nodes.delete(n.id);
+      removeLabel(n.id);
+      if (simNodes.includes(n)) {
+        n.fadeT = 0;
+        if (!exiting.includes(n)) exiting.push(n);
+      }
+    }
+    for (const raw of raws) {
+      let n = nodes.get(raw.id);
+      const isNew = !n;
+      if (isNew) { n = makeItemNode(raw.id); nodes.set(raw.id, n); }
+      updateItemNode(n, raw);
+      if (isNew) { n.fillA = n.fillAT; n.glow = n.glowT; }
+    }
+    itemEdges = rawEdges.map((e) => ({ source: e.source, target: e.target }));
+
+    rebuildTagNodes();
+    computeDepths();
+    computeRadii();
+
+    if (freshLoad) {
+      exiting = [];
+      exitingLinks = [];
+      for (const n of nodes.values()) { n.fade = 1; n.fadeT = 1; }
+      selectedId = null; hoverId = null; tagEmphasis = null; emphMembers = null;
+      isolation = null;
+      traceReq = null; trace = null;
+      hideContextMenu();
+      seedAll();
+      refreshMembership(0);
+      if (sim) sim.alpha(0.9);
+      fitToView(false);
+      if (raws.length) { globalFade = hasGraph ? 1 : 0; globalFadeT = 1; }
+      hasGraph = hasGraph || raws.length > 0;
+      wake();
+    } else {
+      const structural = structuralSig() !== oldSig;
+      refreshMembership(structural ? 0.5 : 0);
+    }
+  };
+
+  window.applyFilter = function (f) {
+    const active = f &&
+      ((f.types || []).length || (f.statuses || []).length || (f.section || ""));
+    filter = active
+      ? { types: f.types || [], statuses: f.statuses || [], section: f.section || "" }
+      : null;
+    refreshMembership(0.45);
+  };
+
+  window.setTagsVisible = function (visible) {
+    tagsVisible = !!visible;
+    refreshMembership(0.45);
+  };
+
+  window.highlightRelated = function (id, mode) {
+    traceReq = (!id || mode === "none") ? null : { id: String(id), mode };
+    setModeControl(mode === "ancestors" || mode === "descendants" ? mode : "none");
+    recomputeTrace();
+    recomputeDims();
+    wake();
+  };
+
+  window.setGraphSettings = function (values) {
+    const parsed = typeof values === "string" ? JSON.parse(values || "{}") : values;
+    const { changed, forces } = mergeSettings(parsed);
+    if (!changed) { syncSettingControls(); return; }
+    afterSettingsChange(new Set(Object.keys(parsed || {})), forces);
+  };
+
+  window.focusNode = function (query) {
+    if (!query) return;
+    const q = String(query).toLowerCase();
+    const hit = (n) => !n.isTag &&
+      (n.id.toLowerCase() === q ||
+       n.id.toLowerCase().includes(q) || String(n.name || "").toLowerCase().includes(q));
+    // Exact id first: the search list sends ids, and a substring could outrank them.
+    let match = simNodes.find((n) => !n.isTag && n.id.toLowerCase() === q) ||
+                simNodes.find(hit);
+    if (!match) {
+      // Isolation or a filter is hiding the requested item — reveal it rather than
+      // silently doing nothing, since the request came from the app's search list.
+      const hidden = [...nodes.values()].find(hit);
+      if (!hidden) return;
+      isolation = null;
+      refreshMembership(0.4);
+      match = simNodes.find((n) => n.id === hidden.id);
+      if (!match) return;
+    }
+    selectedId = match.id;
+    recomputeDims();
+    const k = Math.max(cam.k, 1.2);
+    animateCamera({ k, x: W / 2 - match.x * k, y: H / 2 - match.y * k }, 250);
+    post({ type: "nodeSelected", id: match.id });
+  };
+
+  window.relayout = function () {
+    if (!sim || !nodes.size) return;
+    hideTooltip();
+    seedAll();
+    sim.alpha(1);
+    wake();
+  };
+
+  /* Read-only introspection for debugging/tests; not part of the bridge contract. */
+  window.__graphState = function () {
+    return {
+      cam: { x: cam.x, y: cam.y, k: cam.k },
+      alpha: sim ? sim.alpha() : 0,
+      selectedId, hoverId, tagsVisible, tagEmphasis, scopeKey,
+      settings: Object.assign({}, S),
+      isolation: isolation ? [...isolation] : null,
+      trace: trace ? { nodes: [...trace.nodes], edges: [...trace.edges] } : null,
+      nodes: simNodes.map((n) => ({
+        id: n.id, x: n.x, y: n.y, r: n.r, depth: n.depth,
+        sx: n.x * cam.k + cam.x, sy: n.y * cam.k + cam.y,
+        fillA: n.fillA, glow: n.glow, dim: n.dim, dimT: n.dimT, fade: n.fade, isTag: !!n.isTag,
+      })),
+      links: simLinks.length,
+      exiting: exiting.length,
+    };
+  };
+
+  /* ── Boot ────────────────────────────────────────────────────────────────── */
+
+  readPalette();
+  resizeCanvas();
+  window.addEventListener("resize", () => { resizeCanvas(); wake(); });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    readPalette();
+    wake();
+  });
+})();
+</script>
+</body>
+</html>
