@@ -83,9 +83,14 @@ extension WebViewBox: WKNavigationDelegate {
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         // Keep the web views on their bundled pages; open external links in the browser.
+        // Only web and mail links leave the app. Rendered markdown can come from a model or an
+        // imported document, and a relative href resolves against the bundled page's file://
+        // URL, so opening anything else would let a link launch a local file or app.
         if let url = navigationAction.request.url,
            navigationAction.navigationType == .linkActivated {
-            NSWorkspace.shared.open(url)
+            if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") {
+                NSWorkspace.shared.open(url)
+            }
             decisionHandler(.cancel)
             return
         }
