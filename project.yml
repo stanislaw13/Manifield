@@ -84,8 +84,8 @@ targets:
         ENABLE_APP_SANDBOX: NO
         DEAD_CODE_STRIPPING: YES
         DEVELOPMENT_TEAM: M5C7JFJQJ7
-        MARKETING_VERSION: "0.1.2"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "0.1.3"
+        CURRENT_PROJECT_VERSION: "4"
       configs:
         # Local builds sign for development: no Developer ID certificate needed for
         # day-to-day work, and no keychain prompt on every build.

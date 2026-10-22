@@ -118,7 +118,7 @@ More detail on each part (figures, kept documents, the prover, research programs
 
 ## Try it
 
-**Install.** Download the signed and notarized DMG from the [releases page](https://github.com/stanislaw13/manifield-releases/releases). It needs macOS 15 or later and runs on Apple silicon and Intel Macs.
+**Install.** Download the signed and notarized DMG from the [releases page](https://github.com/stanislaw13/Manifield/releases). It needs macOS 15 or later and runs on Apple silicon and Intel Macs.
 
 **Open the example.** Clone this repository, then in Manifield choose **Open Project…** and pick [`examples/baire-category/baire-notes`](examples/baire-category/). It holds 27 items on Baire category and the three big theorems of functional analysis, with three unfinished proofs and one notebook conjecture. You don't need a model to browse it. [Its README](examples/baire-category/README.md) suggests what to look at, gives a prompt for closing one of the gaps, and explains how to redo the import from the included `.tex` file.
 

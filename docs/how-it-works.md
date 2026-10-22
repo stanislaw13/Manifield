@@ -147,4 +147,4 @@ Logs rotate under `~/Library/Logs/Manifield/`.
 
 ## Updates
 
-Release builds update themselves with [Sparkle 2](https://sparkle-project.org). *Manifield → Check for Updates…* checks on demand, and *Settings → General → Updates* has the automatic-check toggle. Update packages are signed with an EdDSA key whose public half is in `project.yml`. The feed is at `updates.manifield.net/appcast.xml`, and the DMGs are on [GitHub Releases](https://github.com/stanislaw13/manifield-releases/releases).
+Release builds update themselves with [Sparkle 2](https://sparkle-project.org). *Manifield → Check for Updates…* checks on demand, and *Settings → General → Updates* has the automatic-check toggle. Update packages are signed with an EdDSA key whose public half is in `project.yml`. The feed is at `updates.manifield.net/appcast.xml`, and the DMGs are on [GitHub Releases](https://github.com/stanislaw13/Manifield/releases).

@@ -537,7 +537,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = M5C7JFJQJ7;
 				ENABLE_APP_SANDBOX = NO;
@@ -548,7 +548,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.manifield.app;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -723,7 +723,7 @@
 				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = M5C7JFJQJ7;
 				ENABLE_APP_SANDBOX = NO;
@@ -734,7 +734,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.manifield.app;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
