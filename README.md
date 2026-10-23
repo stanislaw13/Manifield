@@ -20,9 +20,9 @@ It is free software under the GPLv3, written by one person.
 
 ## Why
 
-Mathematicians write in LaTeX and on paper. AI agents such as Claude Code and Codex work in folders of plain-text files. More and more people use those agents on real mathematics, and then end up opening Markdown files one at a time to see what happened. Manifield gives the two a shared place: the theory lives in files an agent can read and write, and the mathematician browses the same files as a library and a graph.
+Many mathematicians already do real mathematics with coding agents such as Claude Code and Codex. Those tools are made for programmers: a terminal, a folder of files, raw LaTeX scrolling past in a chat. Manifield is an app made for mathematics. Your theory is organized from the start into definitions, results and conjectures, rendered properly and connected in a dependency graph, and the agents work inside that structure, from your own definitions and notation.
 
-It is meant to be useful **without any AI at all**. Browsing, search, the graph, notation and macros, writing items by hand and keeping PDFs all work with no model configured.
+It is meant to be useful even **without any AI at all**. Browsing, search, the graph, notation and macros, writing items by hand and keeping PDFs all work with no model configured.
 
 ## What it does
 
@@ -44,12 +44,13 @@ It is meant to be useful **without any AI at all**. Browsing, search, the graph,
 
 <sub>Stills from the simulated walkthrough above. They match the app's layout, labels and colours, with some simplification.</sub>
 
-- **A library for your theory.** Items are grouped by section, statements render with KaTeX and your own macros, and there is full-text search. Notation and conventions live in their own file, and PDFs you keep with the project open in a built-in viewer. Adding a PDF makes no model calls.
+- **A library for your theory.** Items are grouped by section, statements render with KaTeX and your own macros, and there is full-text search. PDFs you keep with the project open in a built-in viewer. Adding a PDF makes no model calls.
+- **Your notation.** Notation and conventions live in their own file, which the assistant always has in front of it. Your LaTeX macros live in another file, collected automatically when you import a `.tex` file, so statements render the way you write them. An undefined macro shows up in red rather than failing silently.
 - **Trust levels, never just "correct".** Every statement records what evidence exists. See below.
 - **LaTeX import with review.** The Organizer splits a `.tex` file into definitions, results and conjectures, with dependencies and sections, and harvests your `\newcommand`s. You review every proposed item first.
 - **Chat grounded in your project.** The assistant (called Prismo in the app) has tools to search and read your items, notation and kept documents. It has four modes: *Ask* is read-only, *Propose* (the default) turns every edit into a proposal, *Plan* drafts a research target, and *Auto* edits without asking.
 - **Computational checks with a paper trail.** Python with networkx, sympy and numpy runs in a sandbox with no network and a hard timeout. Every run keeps its script and output next to the claim it supports.
-- **Experimental:** a prover/reviewer loop (the reviewer is prompted to hunt for flaws and re-read citations), multi-step research programs run by a director agent, and an explorer that suggests conjectures.
+- **Experimental: an automated research pipeline.** Give it a problem. It first writes the problem down as a precise statement and freezes it, so the conventions are clear and it can't quietly change what it's trying to prove. A director agent then chooses directions (look for a counterexample, try a particular method, establish a property first) and hands each one to a separate agent that works only on that approach, so a run doesn't get stuck in one line of attack. A claimed solution is checked independently before it counts. Runs can use a lot of tokens. There's also an explorer that suggests conjectures extending your theory.
 - **Literature.** You can import a book or paper as a citable source with its own searchable full text. Agents read full texts only with your permission, through capped, search-first tools.
 - **Sharing.** *File → Export as Package…* zips the project's theory without your chats or run state.
 
