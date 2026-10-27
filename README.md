@@ -12,6 +12,8 @@ Manifield keeps a mathematical theory you are developing as a folder of plain Ma
 
 It is free software under the GPLv3, written by one person.
 
+[Website and interactive examples](https://manifield.net/) · [Installation guide](https://manifield.net/setup/)
+
 <p align="center">
   <a href="docs/media/manifield-demo.mp4"><img src="docs/media/demo-poster.png" width="860" alt="Play the 92-second walkthrough"></a>
   <br>
